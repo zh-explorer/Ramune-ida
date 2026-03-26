@@ -1,15 +1,18 @@
-"""IPC protocol between MCP Server and Worker processes.
+"""Shared protocol types for IPC between Pool and Worker.
 
-JSON line protocol over stdin/stdout pipes.
-Each message is a single line of JSON terminated by newline.
+Includes message format (Request/Response), error codes, and task status.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
-from enum import IntEnum
+from enum import IntEnum, Enum
 from typing import Any
 
+
+# ---------------------------------------------------------------------------
+# IPC error codes
+# ---------------------------------------------------------------------------
 
 class ErrorCode(IntEnum):
     UNKNOWN = -1
@@ -25,16 +28,28 @@ class ErrorCode(IntEnum):
     PYTHON_EXEC_ERROR = -15
 
 
+# ---------------------------------------------------------------------------
+# IPC messages (Pool ↔ Worker, JSON line protocol over dedicated fd pair)
+# ---------------------------------------------------------------------------
+
 @dataclass(slots=True)
 class Request:
-    """Message from MCP Server to Worker."""
+    """Message from Pool to Worker."""
 
     id: str
     method: str
     params: dict[str, Any] = field(default_factory=dict)
+    timeout: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return {"id": self.id, "method": self.method, "params": self.params}
+        d: dict[str, Any] = {
+            "id": self.id,
+            "method": self.method,
+            "params": self.params,
+        }
+        if self.timeout is not None:
+            d["timeout"] = self.timeout
+        return d
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Request:
@@ -42,12 +57,13 @@ class Request:
             id=data["id"],
             method=data["method"],
             params=data.get("params", {}),
+            timeout=data.get("timeout"),
         )
 
 
 @dataclass(slots=True)
 class Response:
-    """Message from Worker to MCP Server."""
+    """Message from Worker to Pool."""
 
     id: str
     result: Any = None
@@ -83,3 +99,15 @@ class Response:
 class ErrorInfo:
     code: int
     message: str
+
+
+# ---------------------------------------------------------------------------
+# Task status (shared across layers)
+# ---------------------------------------------------------------------------
+
+class TaskStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    FAILED = "failed"

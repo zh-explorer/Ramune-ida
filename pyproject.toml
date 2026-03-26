@@ -1,0 +1,25 @@
+[project]
+name = "Ramune-ida"
+version = "0.1.0"
+description = "headless ida mcp server for rumune"
+authors = [
+    {name = "explorer", email = "hsadkhk@gmail.com"},
+]
+dependencies = [
+    "mcp>=1.0.0",
+    "orjson>=3.10",
+    "idapro>=0.0.7",
+]
+requires-python = ">=3.12"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.scripts]
+ramune-ida = "ramune_ida.cli:main"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.pdm]
+distribution = true

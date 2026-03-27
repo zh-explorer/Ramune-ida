@@ -1,11 +1,19 @@
-"""Shared protocol types for IPC between Pool and Worker.
+"""Shared protocol types for IPC between Server and Worker.
 
-Includes message format (Request/Response), error codes, and task status.
+This module defines the **wire format** and **shared enums**:
+
+- ``Method`` — central registry of every IPC method name
+- ``Request`` / ``Response`` — wire-format messages
+- ``ErrorCode`` / ``ErrorInfo`` — structured errors
+- ``TaskStatus`` — lifecycle states for async tasks
+
+Typed command definitions (parameters + result) live in
+:mod:`ramune_ida.commands`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import IntEnum, Enum
 from typing import Any
 
@@ -28,28 +36,40 @@ class ErrorCode(IntEnum):
     PYTHON_EXEC_ERROR = -15
 
 
+@dataclass(slots=True)
+class ErrorInfo:
+    code: int
+    message: str
+
+
 # ---------------------------------------------------------------------------
-# IPC messages (Pool ↔ Worker, JSON line protocol over dedicated fd pair)
+# Method enum — central registry of every IPC method
+# ---------------------------------------------------------------------------
+
+class Method(str, Enum):
+    PING = "ping"
+    SHUTDOWN = "shutdown"
+    OPEN_DATABASE = "open_database"
+    CLOSE_DATABASE = "close_database"
+    SAVE_DATABASE = "save_database"
+    DECOMPILE = "decompile"
+    DISASM = "disasm"
+
+
+# ---------------------------------------------------------------------------
+# IPC messages (Server ↔ Worker, JSON line protocol over socketpair)
 # ---------------------------------------------------------------------------
 
 @dataclass(slots=True)
 class Request:
-    """Message from Pool to Worker."""
+    """Wire-format message from Server to Worker."""
 
     id: str
     method: str
     params: dict[str, Any] = field(default_factory=dict)
-    timeout: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        d: dict[str, Any] = {
-            "id": self.id,
-            "method": self.method,
-            "params": self.params,
-        }
-        if self.timeout is not None:
-            d["timeout"] = self.timeout
-        return d
+        return {"id": self.id, "method": self.method, "params": self.params}
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Request:
@@ -57,13 +77,12 @@ class Request:
             id=data["id"],
             method=data["method"],
             params=data.get("params", {}),
-            timeout=data.get("timeout"),
         )
 
 
 @dataclass(slots=True)
 class Response:
-    """Message from Worker to Pool."""
+    """Wire-format message from Worker to Server."""
 
     id: str
     result: Any = None
@@ -93,12 +112,6 @@ class Response:
     @classmethod
     def fail(cls, req_id: str, code: ErrorCode, message: str) -> Response:
         return cls(id=req_id, error=ErrorInfo(code=int(code), message=message))
-
-
-@dataclass(slots=True)
-class ErrorInfo:
-    code: int
-    message: str
 
 
 # ---------------------------------------------------------------------------

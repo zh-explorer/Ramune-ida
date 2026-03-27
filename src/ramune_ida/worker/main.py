@@ -3,12 +3,12 @@
 Lifecycle:
   1. Import idapro (must be the first import)
   2. Import all handlers to register them
-  3. Open pipe I/O on dedicated fds (passed via env vars)
+  3. Open socket I/O on the fd passed via env var
   4. Enter message loop: recv → dispatch → send
-  5. Exit on EOF (parent closed pipe) or "shutdown" command
+  5. Exit on EOF (parent closed socket) or "shutdown" command
 
 stdin/stdout/stderr are NOT touched — IDA console output and
-print() work normally. The IPC protocol uses dedicated fd pairs.
+print() work normally. The IPC uses a UNIX socketpair.
 """
 
 from __future__ import annotations
@@ -23,20 +23,20 @@ import idapro
 import ramune_ida.worker.handlers.session  # noqa: F401
 import ramune_ida.worker.handlers.analysis  # noqa: F401
 
-from ramune_ida.worker.pipe_io import PipeIO
+from ramune_ida.worker.socket_io import SocketIO
 from ramune_ida.worker.dispatch import dispatch
-from ramune_ida.protocol import Response
+from ramune_ida.commands import Ping, Shutdown
+from ramune_ida.protocol import Method, Response
 
 
 def main() -> None:
-    pipe = PipeIO()
+    io = SocketIO()
 
-    # Notify parent that worker is ready
-    pipe.send(Response.ok("__init__", {"status": "ready"}))
+    io.send(Response.ok("__init__", {"status": "ready"}))
 
     while True:
         try:
-            request = pipe.recv()
+            request = io.recv()
         except Exception:
             traceback.print_exc()
             break
@@ -44,19 +44,18 @@ def main() -> None:
         if request is None:
             break
 
-        if request.method == "shutdown":
-            pipe.send(Response.ok(request.id, {"status": "shutdown"}))
+        if request.method == Method.SHUTDOWN.value:
+            io.send(Response.ok(request.id, Shutdown.Result().to_dict()))
             break
 
-        if request.method == "ping":
-            pipe.send(Response.ok(request.id, {"status": "pong"}))
+        if request.method == Method.PING.value:
+            io.send(Response.ok(request.id, Ping.Result().to_dict()))
             continue
 
         response = dispatch(request)
-        pipe.send(response)
+        io.send(response)
 
-    # Cleanup
-    pipe.close()
+    io.close()
     try:
         idapro.close_database(save=False)
     except Exception:

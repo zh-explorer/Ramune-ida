@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ramune_ida.protocol import ErrorCode
+from ramune_ida.commands import Decompile, Disasm
+from ramune_ida.protocol import ErrorCode, Method
 from ramune_ida.worker.dispatch import handler, HandlerError
 
 
@@ -29,15 +30,14 @@ def _resolve_addr(func: str) -> int:
     return addr
 
 
-@handler("decompile")
-def handle_decompile(params: dict[str, Any]) -> dict[str, Any]:
+@handler(Method.DECOMPILE)
+def handle_decompile(cmd: Decompile) -> dict[str, Any]:
     import ida_hexrays
 
-    func_ref = params.get("func")
-    if not func_ref:
+    if not cmd.func:
         raise HandlerError(ErrorCode.INVALID_PARAMS, "Missing required parameter: func")
 
-    addr = _resolve_addr(func_ref)
+    addr = _resolve_addr(cmd.func)
 
     try:
         cfunc = ida_hexrays.decompile(addr)
@@ -45,7 +45,7 @@ def handle_decompile(params: dict[str, Any]) -> dict[str, Any]:
         raise HandlerError(ErrorCode.DECOMPILE_FAILED, f"Decompilation failed: {exc}")
 
     if cfunc is None:
-        raise HandlerError(ErrorCode.DECOMPILE_FAILED, f"Decompilation returned None for {func_ref}")
+        raise HandlerError(ErrorCode.DECOMPILE_FAILED, f"Decompilation returned None for {cmd.func}")
 
     return {
         "addr": hex(addr),
@@ -53,21 +53,19 @@ def handle_decompile(params: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-@handler("disasm")
-def handle_disasm(params: dict[str, Any]) -> dict[str, Any]:
+@handler(Method.DISASM)
+def handle_disasm(cmd: Disasm) -> dict[str, Any]:
     import ida_ua
     import idc
 
-    addr_ref = params.get("addr")
-    if addr_ref is None:
+    if not cmd.addr:
         raise HandlerError(ErrorCode.INVALID_PARAMS, "Missing required parameter: addr")
 
-    addr = _resolve_addr(str(addr_ref))
-    count = params.get("count", 20)
+    addr = _resolve_addr(cmd.addr)
 
     lines: list[dict[str, Any]] = []
     cur = addr
-    for _ in range(count):
+    for _ in range(cmd.count):
         insn = ida_ua.insn_t()
         length = ida_ua.decode_insn(insn, cur)
         if length == 0:

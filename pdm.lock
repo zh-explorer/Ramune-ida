@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = []
 lock_version = "4.5.0"
-content_hash = "sha256:2911cef6f8481f73e2d1ddd7db8032be8dd6f6be291457c21c3fb65f2ae9b6b0"
+content_hash = "sha256:70cb1a3c11e7c0453c86e2ad215aa056eae46ac3b0603bb92f9a07be19d12796"
 
 [[metadata.targets]]
 requires_python = ">=3.12"
@@ -225,15 +225,6 @@ summary = ""
 files = [
     {file = "httpx_sse-0.4.3-py3-none-any.whl", hash = "sha256:0ac1c9fe3c0afad2e0ebb25a934a59f4c7823b60792691f779fad2c5568830fc"},
     {file = "httpx_sse-0.4.3.tar.gz", hash = "sha256:9b1ed0127459a66014aec3c56bebd93da3c1bc8bb6618c8082039a44889a755d"},
-]
-
-[[package]]
-name = "idapro"
-version = "0.0.7"
-summary = ""
-files = [
-    {file = "idapro-0.0.7-py3-none-any.whl", hash = "sha256:3cb8d48ac21a19e6a0ef65eacd0005a1f9c40a264a7bcb675914eaa20c6e1371"},
-    {file = "idapro-0.0.7.tar.gz", hash = "sha256:0b2e184b19e4d8404ea48b1f17f39b21b054931315940ee9716ef8559144988f"},
 ]
 
 [[package]]

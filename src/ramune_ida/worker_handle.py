@@ -2,6 +2,10 @@
 
 Thin process manager: spawn, execute one command at a time, force kill.
 Each Project owns one WorkerHandle.
+
+IPC uses a UNIX socketpair — one socket per side, full duplex.
+``asyncio.open_connection(sock=)`` gives us a standard
+``(StreamReader, StreamWriter)`` pair on the server side.
 """
 
 from __future__ import annotations
@@ -9,14 +13,13 @@ from __future__ import annotations
 import asyncio
 import itertools
 import logging
-import os
+import socket
 import subprocess
-from typing import Any
 
 import orjson
 
 from ramune_ida.protocol import Request, Response
-from ramune_ida.worker.pipe_io import ENV_READ_FD, ENV_WRITE_FD
+from ramune_ida.worker.socket_io import ENV_SOCK_FD
 
 log = logging.getLogger(__name__)
 
@@ -30,7 +33,7 @@ class WorkerDead(Exception):
 class WorkerHandle:
     """Async handle to one Worker subprocess.
 
-    Owns a dedicated fd pair for IPC.  The owning Project
+    Owns one end of a UNIX socketpair for IPC.  The owning Project
     must ensure only one ``execute()`` runs at a time per handle.
     """
 
@@ -41,10 +44,7 @@ class WorkerHandle:
 
         self._proc: subprocess.Popen[bytes] | None = None
         self._reader: asyncio.StreamReader | None = None
-        self._write_transport: asyncio.WriteTransport | None = None
-
-        self._read_fd_file: Any = None
-        self._write_fd_file: Any = None
+        self._writer: asyncio.StreamWriter | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -54,47 +54,36 @@ class WorkerHandle:
         """Start a Worker subprocess and wait for its ready message."""
         self.instance_id = f"w-{next(_instance_counter):04d}"
 
-        r_to_child, w_to_child = os.pipe()
-        r_from_child, w_from_child = os.pipe()
+        parent_sock, child_sock = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
+        child_fd = child_sock.fileno()
+
         try:
-            env = os.environ.copy()
-            env[ENV_READ_FD] = str(r_to_child)
-            env[ENV_WRITE_FD] = str(w_from_child)
+            env = dict(__import__("os").environ)
+            env[ENV_SOCK_FD] = str(child_fd)
 
             self._proc = subprocess.Popen(
                 [self._python_path, "-m", "ramune_ida.worker.main"],
                 env=env,
-                pass_fds=(r_to_child, w_from_child),
+                pass_fds=(child_fd,),
             )
         except Exception:
-            for fd in (r_to_child, w_to_child, r_from_child, w_from_child):
-                os.close(fd)
+            parent_sock.close()
+            child_sock.close()
             raise
-
-        os.close(r_to_child)
-        os.close(w_from_child)
+        finally:
+            child_sock.close()
 
         try:
-            loop = asyncio.get_running_loop()
-
-            self._read_fd_file = os.fdopen(r_from_child, "rb")
-            self._reader = asyncio.StreamReader()
-            await loop.connect_read_pipe(
-                lambda: asyncio.StreamReaderProtocol(self._reader),
-                self._read_fd_file,
+            parent_sock.setblocking(False)
+            self._reader, self._writer = await asyncio.open_connection(
+                sock=parent_sock,
             )
 
-            self._write_fd_file = os.fdopen(w_to_child, "wb")
-            transport, _ = await loop.connect_write_pipe(
-                asyncio.BaseProtocol,
-                self._write_fd_file,
-            )
-            self._write_transport = transport  # type: ignore[assignment]
-
-            ready = await self._pipe_recv()
+            ready = await self._recv()
             if ready.error:
                 raise WorkerDead(
-                    f"Worker {self.instance_id} failed to start: {ready.error.message}"
+                    f"Worker {self.instance_id} failed to start: "
+                    f"{ready.error.message}"
                 )
         except BaseException:
             self.kill()
@@ -111,8 +100,8 @@ class WorkerHandle:
         The project's execution loop guarantees only one execute()
         runs at a time per handle.
         """
-        await self._pipe_send(request)
-        return await self._pipe_recv()
+        await self._send(request)
+        return await self._recv()
 
     def kill(self) -> None:
         """Forcefully terminate the Worker process and clean up."""
@@ -124,29 +113,31 @@ class WorkerHandle:
                 pass
         self._proc = None
 
-        if self._write_transport:
-            self._write_transport.close()
-            self._write_transport = None
+        if self._writer:
+            try:
+                self._writer.close()
+            except Exception:
+                pass
+            self._writer = None
         self._reader = None
-        self._read_fd_file = None
-        self._write_fd_file = None
 
         log.info("Worker %s killed", self.instance_id)
 
     # ------------------------------------------------------------------
-    # Pipe I/O
+    # Socket I/O
     # ------------------------------------------------------------------
 
-    async def _pipe_send(self, request: Request) -> None:
-        if self._write_transport is None:
-            raise WorkerDead("pipe closed")
+    async def _send(self, request: Request) -> None:
+        if self._writer is None:
+            raise WorkerDead("socket closed")
         data = orjson.dumps(request.to_dict()) + b"\n"
-        self._write_transport.write(data)
+        self._writer.write(data)
+        await self._writer.drain()
 
-    async def _pipe_recv(self) -> Response:
+    async def _recv(self) -> Response:
         if self._reader is None:
-            raise WorkerDead("pipe closed")
+            raise WorkerDead("socket closed")
         line = await self._reader.readline()
         if not line:
-            raise WorkerDead("pipe EOF — worker process died")
+            raise WorkerDead("socket EOF — worker process died")
         return Response.from_dict(orjson.loads(line))

@@ -1,17 +1,18 @@
-"""Command dispatch: routes method names to handler functions."""
+"""Command dispatch: routes Method → handler function."""
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from ramune_ida.protocol import Request, Response, ErrorCode
+from ramune_ida.commands import Command, command_from_params
+from ramune_ida.protocol import ErrorCode, Method, Request, Response
 
-Handler = Callable[[dict[str, Any]], Any]
+Handler = Callable[[Command], Any]
 
-_HANDLERS: dict[str, Handler] = {}
+_HANDLERS: dict[Method, Handler] = {}
 
 
-def handler(method: str) -> Callable[[Handler], Handler]:
+def handler(method: Method) -> Callable[[Handler], Handler]:
     """Register a function as the handler for *method*."""
     def decorator(fn: Handler) -> Handler:
         _HANDLERS[method] = fn
@@ -21,15 +22,24 @@ def handler(method: str) -> Callable[[Handler], Handler]:
 
 def dispatch(request: Request) -> Response:
     """Look up the handler for *request.method* and call it."""
-    fn = _HANDLERS.get(request.method)
-    if fn is None:
+    try:
+        cmd = command_from_params(request.method, request.params)
+    except ValueError:
         return Response.fail(
             request.id,
             ErrorCode.METHOD_NOT_FOUND,
             f"Unknown method: {request.method}",
         )
+
+    fn = _HANDLERS.get(cmd.method)
+    if fn is None:
+        return Response.fail(
+            request.id,
+            ErrorCode.METHOD_NOT_FOUND,
+            f"No handler for method: {request.method}",
+        )
     try:
-        result = fn(request.params)
+        result = fn(cmd)
         return Response.ok(request.id, result)
     except HandlerError as exc:
         return Response.fail(request.id, exc.code, str(exc))

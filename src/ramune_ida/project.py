@@ -10,10 +10,10 @@ import asyncio
 import itertools
 import logging
 import time
-from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
-from ramune_ida.protocol import ErrorInfo, Request, TaskStatus
+from ramune_ida.commands import Command, OpenDatabase, SaveDatabase
+from ramune_ida.protocol import ErrorCode, ErrorInfo, Method, TaskStatus
 from ramune_ida.worker_handle import WorkerDead, WorkerHandle
 
 if TYPE_CHECKING:
@@ -28,19 +28,106 @@ def _make_task_id() -> str:
     return f"t-{next(_task_counter):06d}"
 
 
-@dataclass
+# ---------------------------------------------------------------------------
+# Task — encapsulated unit of work
+# ---------------------------------------------------------------------------
+
 class Task:
-    """A unit of work submitted by the MCP layer."""
+    """A unit of work submitted by the MCP layer.
 
-    task_id: str
-    project: Project
-    method: str
-    params: dict[str, Any] = field(default_factory=dict)
-    status: TaskStatus = TaskStatus.PENDING
-    result: Any = None
-    error: ErrorInfo | None = None
-    _coro: asyncio.Task[None] | None = field(default=None, repr=False)
+    All attributes are read-only properties.  State transitions go
+    through explicit methods (``start``, ``complete``, ``fail``,
+    ``cancel``) so the lifecycle is always consistent.
+    """
 
+    __slots__ = (
+        "_task_id", "_command", "_status",
+        "_result", "_error", "_coro",
+    )
+
+    def __init__(self, task_id: str, command: Command) -> None:
+        self._task_id = task_id
+        self._command = command
+        self._status = TaskStatus.PENDING
+        self._result: Any = None
+        self._error: ErrorInfo | None = None
+        self._coro: asyncio.Task[None] | None = None
+
+    def __repr__(self) -> str:
+        return f"Task({self._task_id!r}, {self._command.method.value}, {self._status.value})"
+
+    # -- Read-only properties (for MCP layer) -------------------------------
+
+    @property
+    def task_id(self) -> str:
+        return self._task_id
+
+    @property
+    def command(self) -> Command:
+        return self._command
+
+    @property
+    def method(self) -> Method:
+        return self._command.method
+
+    @property
+    def status(self) -> TaskStatus:
+        return self._status
+
+    @property
+    def result(self) -> Any:
+        return self._result
+
+    @property
+    def error(self) -> ErrorInfo | None:
+        return self._error
+
+    @property
+    def is_done(self) -> bool:
+        return self._coro is not None and self._coro.done()
+
+    # -- State transition methods (for Project internally) ------------------
+
+    def start(self) -> None:
+        self._status = TaskStatus.RUNNING
+
+    def complete(self, result: Any) -> None:
+        self._status = TaskStatus.COMPLETED
+        self._result = result
+
+    def fail(self, error: ErrorInfo) -> None:
+        self._status = TaskStatus.FAILED
+        self._error = error
+
+    def cancel(self, *, kill_coro: bool = True) -> None:
+        self._status = TaskStatus.CANCELLED
+        if kill_coro and self._coro is not None and not self._coro.done():
+            self._coro.cancel()
+
+    # -- Serialisation for MCP layer ----------------------------------------
+
+    def to_dict(self) -> dict[str, Any]:
+        """Standard dict representation for MCP tool responses."""
+        d: dict[str, Any] = {
+            "task_id": self._task_id,
+            "method": self._command.method.value,
+            "status": self._status.value,
+        }
+        if self._result is not None:
+            d["result"] = self._result
+        if self._error is not None:
+            d["error"] = {"code": self._error.code, "message": self._error.message}
+        return d
+
+    # -- Internal (set by Project) ------------------------------------------
+
+    def _bind_coro(self, coro: asyncio.Task[None]) -> None:
+        self._coro = coro
+
+
+# ---------------------------------------------------------------------------
+# Project
+# ---------------------------------------------------------------------------
 
 class Project:
     """A work context bound to one IDB file.
@@ -49,7 +136,7 @@ class Project:
     through _exec_lock — asyncio.Lock acts as the natural FIFO queue.
 
     The worker instance can be closed gracefully via
-    ``execute("close_database")`` (worker saves + exits on its own)
+    ``execute(CloseDatabase())`` (worker saves + exits on its own)
     or killed immediately via ``force_close()``.  Either way, the
     Project stays alive — the next ``execute()`` will spawn a fresh
     worker automatically.
@@ -81,33 +168,24 @@ class Project:
 
     @property
     def has_active_tasks(self) -> bool:
-        return any(not t._coro.done() for t in self._tasks.values())
+        return any(not t.is_done for t in self._tasks.values())
 
     # ==================================================================
     # Public API
     # ==================================================================
 
-    def _submit(self, method: str, params: dict[str, Any] | None = None) -> Task:
+    def _submit(self, cmd: Command) -> Task:
         """Create a Task, enqueue it, and return immediately."""
-        task = Task(
-            task_id=_make_task_id(),
-            project=self,
-            method=method,
-            params=params or {},
-        )
-        task._coro = asyncio.create_task(
-            self._exec_one(task), name=f"task-{task.task_id}"
+        task = Task(task_id=_make_task_id(), command=cmd)
+        task._bind_coro(
+            asyncio.create_task(self._exec_one(task), name=f"task-{task.task_id}")
         )
         self._tasks[task.task_id] = task
         return task
 
-    async def execute(
-        self,
-        method: str,
-        params: dict[str, Any] | None = None,
-        timeout: float | None = None,
-    ) -> Task:
-        task = self._submit(method, params)
+    async def execute(self, cmd: Command, timeout: float | None = None) -> Task:
+        """Submit a command and optionally wait for completion."""
+        task = self._submit(cmd)
         self.last_accessed = time.monotonic()
 
         if timeout is not None and timeout > 0:
@@ -120,50 +198,44 @@ class Project:
         else:
             await task._coro
 
-        if task._coro.done():
+        if task.is_done:
             self._tasks.pop(task.task_id, None)
 
         return task
 
     async def get_task_result(self, task_id: str) -> Task | None:
         task = self._tasks.get(task_id)
-        if task is not None and task._coro.done():
+        if task is not None and task.is_done:
             return self._tasks.pop(task_id)
         return None
 
-    def cancel(self, task_id: str) -> None:
+    def cancel_task(self, task_id: str) -> None:
         task = self._tasks.get(task_id)
-        if task is None or task._coro.done():
+        if task is None or task.is_done:
             return
         was_running = task.status == TaskStatus.RUNNING
-        task.status = TaskStatus.CANCELLED
         if was_running and self._handle is not None:
+            task.cancel(kill_coro=False)
             self._handle.kill()
             self._handle = None
             self._limiter.on_destroyed(self.project_id)
         else:
-            task._coro.cancel()
+            task.cancel()
 
     def force_close(self) -> None:
-        """Cancel all tasks and kill the worker immediately.
-
-        Entirely synchronous — never yields to the event loop, so no
-        race conditions.  The Project remains usable; subsequent
-        ``execute()`` calls will spawn a fresh worker.
-        """
+        """Cancel all tasks and kill the worker immediately."""
         if self._handle is not None:
             self._handle.kill()
             self._handle = None
             self._limiter.on_destroyed(self.project_id)
         for task in self._tasks.values():
-            if not task._coro.done():
-                task.status = TaskStatus.CANCELLED
-                task._coro.cancel()
+            if not task.is_done:
+                task.cancel()
         self._tasks.clear()
 
     async def save(self) -> Task:
         """Queue a save_database task (waits for completion)."""
-        return await self.execute("save_database")
+        return await self.execute(SaveDatabase())
 
     # ==================================================================
     # Task execution
@@ -173,35 +245,28 @@ class Project:
         try:
             async with self._exec_lock:
                 await self._ensure_worker()
-                task.status = TaskStatus.RUNNING
-                req = Request(
-                    id=task.task_id,
-                    method=task.method,
-                    params=task.params,
-                )
+                task.start()
+                req = task.command.to_request(task.task_id)
                 resp = await self._handle.execute(req)
                 if task.status == TaskStatus.CANCELLED:
                     return
                 if resp.error:
-                    task.status = TaskStatus.FAILED
-                    task.error = resp.error
+                    task.fail(resp.error)
                 else:
-                    task.status = TaskStatus.COMPLETED
-                    task.result = resp.result
+                    task.complete(resp.result)
         except asyncio.CancelledError:
-            task.status = TaskStatus.CANCELLED
+            task.cancel()
         except WorkerDead:
             if self._handle is not None:
                 self._handle = None
                 self._limiter.on_destroyed(self.project_id)
             if task.status != TaskStatus.CANCELLED:
-                task.status = TaskStatus.FAILED
-                task.error = ErrorInfo(
-                    code=-5, message="worker died during execution"
-                )
+                task.fail(ErrorInfo(
+                    code=ErrorCode.INTERNAL_ERROR,
+                    message="worker died during execution",
+                ))
         except Exception as exc:
-            task.status = TaskStatus.FAILED
-            task.error = ErrorInfo(code=-5, message=str(exc))
+            task.fail(ErrorInfo(code=ErrorCode.INTERNAL_ERROR, message=str(exc)))
 
     async def _ensure_worker(self) -> None:
         if self._handle is not None:
@@ -216,11 +281,7 @@ class Project:
         await handle.spawn()
         self._limiter.on_spawned(self.project_id)
         try:
-            req = Request(
-                id="__open__",
-                method="open_database",
-                params={"path": self.exe_path},
-            )
+            req = OpenDatabase(path=self.exe_path).to_request("__open__")
             resp = await handle.execute(req)
             if resp.error:
                 raise RuntimeError(

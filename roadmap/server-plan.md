@@ -1,6 +1,6 @@
 # MCP Server 框架实现计划
 
-> 状态：待实现 | 日期：2026-03-25
+> 状态：框架已实现 | 日期：2026-03-25 | 更新：2026-03-25
 
 ## 现状
 
@@ -233,26 +233,132 @@ def main():
 
 ---
 
-## 目标文件结构
+## 文件结构（当前）
 
 ```
 src/ramune_ida/
-├── config.py                    # ServerConfig
-├── cli.py                       # CLI 入口
+├── __init__.py
 ├── __main__.py                  # python -m ramune_ida
-├── server/
+├── cli.py                       # CLI 入口（URL 解析 + argparse）
+├── config.py                    # ServerConfig dataclass
+│
+├── protocol.py                  # Wire format: Method, Request/Response, ErrorCode, TaskStatus
+├── commands.py                  # Command 基类 + 所有命令 dataclass（含 Result 内部类）
+├── limiter.py                   # Limiter — 全局实例计数 + soft/hard limit
+├── worker_handle.py             # WorkerHandle — 单个 Worker 子进程 (socketpair IPC)
+├── project.py                   # Project + Task — 拥有 WorkerHandle、任务队列、执行循环
+│
+├── server/                      # MCP Server 层
 │   ├── __init__.py
-│   ├── app.py                   # FastMCP 实例、lifespan
-│   ├── state.py                 # AppState
-│   ├── output.py                # OutputStore（截断 + 缓存）
-│   ├── files.py                 # HTTP 文件端点（custom_route）
-│   ├── resources.py             # MCP Resources
+│   ├── app.py                   # FastMCP 实例、lifespan、register_tool 装饰器
+│   ├── state.py                 # AppState（Project 集合、Limiter、OutputStore）
+│   ├── output.py                # OutputStore（磁盘存储、自动截断、按 project 管理）
+│   ├── files.py                 # HTTP 文件端点（custom_route，binary 上传/下载）
+│   ├── resources.py             # MCP Resources（projects://、project://、outputs://、files://）
 │   └── tools/
-│       ├── __init__.py          # 统一注册
-│       └── session.py           # 会话管理工具
-├── project.py                   # (已有)
-├── limiter.py                   # (已有)
-├── worker_handle.py             # (已有)
-├── protocol.py                  # (已有)
-└── worker/                      # (已有)
+│       ├── __init__.py          # ★ Tool 注册表 — 所有 tool 在此集中声明
+│       └── session.py           # 会话管理 tool 实现（纯 async 函数）
+│
+└── worker/                      # Worker 进程侧（运行在 idalib 环境中）
+    ├── __init__.py
+    ├── main.py                  # Worker 入口：消息循环
+    ├── dispatch.py              # 命令分发：Method enum → handler
+    ├── socket_io.py             # UNIX socketpair JSON line 读写
+    └── handlers/                # 各命令的具体实现（调用 IDA API）
+        ├── __init__.py
+        ├── session.py           # open/close/save database
+        └── analysis.py          # decompile, disasm
 ```
+
+### 双侧对称设计
+
+`server/tools/` 和 `worker/handlers/` 的文件结构一一对应：
+
+- `server/tools/session.py` — MCP 接口层（调用 `project.execute(Command())`）
+- `worker/handlers/session.py` — IDA 实现层（接收 Command，调用 `idapro` API）
+
+---
+
+## 添加新功能的开发流程
+
+以添加 `xrefs_to` 工具为例：
+
+### Step 1: 定义 Command（`commands.py`）
+
+```python
+@dataclass(slots=True)
+class XrefsTo(Command):
+    method: ClassVar[Method] = Method.XREFS_TO  # 先在 protocol.py 的 Method 枚举中添加
+    addr: str = ""
+    max_results: int = 100
+
+    @dataclass(slots=True)
+    class Result:
+        addr: str = ""
+        xrefs: list[dict[str, Any]] = field(default_factory=list)
+
+        def to_dict(self) -> dict[str, Any]:
+            return asdict(self)
+```
+
+同时在 `protocol.py` 中添加 `Method.XREFS_TO = "xrefs_to"`，
+在 `commands.py` 底部的 `COMMAND_TYPES` 注册表中加入 `XrefsTo`。
+
+### Step 2: 实现 Worker handler（`worker/handlers/analysis.py`）
+
+```python
+@handler(Method.XREFS_TO)
+def handle_xrefs_to(cmd: XrefsTo) -> dict[str, Any]:
+    import idautils
+    addr = _resolve_addr(cmd.addr)
+    xrefs = []
+    for xref in idautils.XrefsTo(addr):
+        xrefs.append({"from": hex(xref.frm), "type": xref.type})
+        if len(xrefs) >= cmd.max_results:
+            break
+    return {"addr": hex(addr), "xrefs": xrefs}
+```
+
+在 `worker/main.py` 中确认 handler 模块已被 import（现有的
+`import ramune_ida.worker.handlers.analysis` 会自动覆盖）。
+
+### Step 3: 编写 MCP tool 实现（`server/tools/analysis.py`）
+
+```python
+async def xrefs_to(
+    addr: str,
+    ctx: Context,
+    project_id: str | None = None,
+    max_results: int = 100,
+) -> dict:
+    state = get_state()
+    project = state.resolve_project(project_id)
+    task = await project.execute(XrefsTo(addr=addr, max_results=max_results))
+    return {
+        "project_id": project.project_id,
+        "status": task.status.value,
+        **(task.result or {}),
+    }
+```
+
+### Step 4: 注册 tool（`server/tools/__init__.py`）
+
+```python
+from ramune_ida.server.tools import analysis
+
+register_tool(
+    description=(
+        "Get all cross-references to the given address or function name. "
+        "Returns a list of {from, type} entries."
+    ),
+)(analysis.xrefs_to)
+```
+
+### 检查清单
+
+- [ ] `protocol.py` — `Method` 枚举新增
+- [ ] `commands.py` — `Command` 子类 + `Result` 内部类 + `COMMAND_TYPES` 注册
+- [ ] `worker/handlers/` — `@handler(Method.XXX)` 实现
+- [ ] `server/tools/<module>.py` — async 实现函数
+- [ ] `server/tools/__init__.py` — `register_tool(description=...)(impl)` 注册
+- [ ] `tests/` — 测试覆盖

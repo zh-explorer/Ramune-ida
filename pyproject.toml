@@ -6,9 +6,9 @@ authors = [
     {name = "explorer", email = "hsadkhk@gmail.com"},
 ]
 dependencies = [
-    "mcp>=1.0.0",
+    "mcp>=1.8.0",
     "orjson>=3.10",
-    "idapro>=0.0.7",
+    "starlette>=0.37",
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -23,6 +23,9 @@ build-backend = "pdm.backend"
 
 [tool.pdm]
 distribution = true
+
+[project.optional-dependencies]
+worker = ["idapro>=0.0.7"]
 
 [dependency-groups]
 dev = [

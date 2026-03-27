@@ -1,34 +1,32 @@
 """Fake Worker that responds to commands without IDA.
 
-Used for Pool unit tests.  Supports the same IPC protocol as the
-real Worker (dedicated fd pair, JSON line) but returns canned
-responses for lifecycle commands and echoes everything else.
+Used for unit tests.  Supports the same IPC protocol as the real
+Worker (UNIX socketpair, JSON line) but returns canned responses
+for lifecycle commands and echoes everything else.
 
 Run with:
-    RAMUNE_READ_FD=... RAMUNE_WRITE_FD=... python tests/mock_worker.py
+    RAMUNE_SOCK_FD=... python tests/mock_worker.py
 """
 
 from __future__ import annotations
 
 import os
-import sys
+import socket
 import time
 
 import orjson
 
-ENV_READ_FD = "RAMUNE_READ_FD"
-ENV_WRITE_FD = "RAMUNE_WRITE_FD"
-
-_current_db: str | None = None
+ENV_SOCK_FD = "RAMUNE_SOCK_FD"
 
 
 def main() -> None:
-    global _current_db
+    sock_fd = int(os.environ[ENV_SOCK_FD])
+    sock = socket.socket(fileno=sock_fd)
+    sock.setblocking(True)
+    reader = sock.makefile("rb")
+    writer = sock.makefile("wb")
 
-    read_fd = int(os.environ[ENV_READ_FD])
-    write_fd = int(os.environ[ENV_WRITE_FD])
-    reader = os.fdopen(read_fd, "rb")
-    writer = os.fdopen(write_fd, "wb")
+    current_db: str | None = None
 
     def send(msg: dict) -> None:
         writer.write(orjson.dumps(msg) + b"\n")
@@ -55,11 +53,11 @@ def main() -> None:
 
         elif method == "open_database":
             path = params.get("path", "")
-            _current_db = path
+            current_db = path
             send({"id": rid, "result": {"path": path}})
 
         elif method == "close_database":
-            _current_db = None
+            current_db = None
             send({"id": rid, "result": {"status": "closed"}})
 
         elif method == "save_database":
@@ -75,6 +73,11 @@ def main() -> None:
 
     reader.close()
     writer.close()
+    try:
+        sock.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    sock.close()
 
 
 if __name__ == "__main__":

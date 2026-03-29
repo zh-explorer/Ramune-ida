@@ -163,3 +163,4 @@ cython_debug/
 
 .history/
 tests/ch*
+tests/binary/

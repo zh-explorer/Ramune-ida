@@ -110,6 +110,7 @@ Claude Desktop 或 Cursor 中添加：
 {
   "mcpServers": {
     "ramune-ida": {
+      "type": "streamable-http",
       "url": "http://127.0.0.1:8000/mcp"
     }
   }

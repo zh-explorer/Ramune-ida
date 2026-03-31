@@ -85,7 +85,9 @@ def main() -> None:
     configure(config)
 
     transport, host, port = parse_transport_url(args.url)
-    mcp.run(transport=transport, host=host, port=port)
+    mcp.settings.host = host
+    mcp.settings.port = port
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":

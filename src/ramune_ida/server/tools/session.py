@@ -10,7 +10,6 @@ import asyncio
 import os
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from ramune_ida.commands import CloseDatabase, Ping
@@ -21,7 +20,6 @@ from ramune_ida.server.app import get_state
 
 
 async def open_project(
-    ctx: Context,
     project_id: str | None = None,
 ) -> dict:
     state = get_state()
@@ -34,14 +32,13 @@ async def open_project(
 
 async def close_project(
     project_id: str,
-    ctx: Context,
 ) -> dict:
     state = get_state()
     await state.close_project(project_id)
     return {"status": "closed", "project_id": project_id}
 
 
-async def projects(ctx: Context) -> dict:
+async def projects() -> dict:
     state = get_state()
     result = []
     for pid, project in state.projects.items():
@@ -66,7 +63,6 @@ async def projects(ctx: Context) -> dict:
 async def open_database(
     project_id: str,
     path: Annotated[str, Field(description="Binary or IDB path, relative to work_dir")],
-    ctx: Context,
 ) -> dict:
     state = get_state()
     project = state.resolve_project(project_id)
@@ -98,7 +94,6 @@ async def open_database(
 
 async def close_database(
     project_id: str,
-    ctx: Context,
     force: bool = False,
 ) -> dict:
     state = get_state()
@@ -133,7 +128,6 @@ async def close_database(
 async def get_task_result(
     task_id: str,
     project_id: str,
-    ctx: Context,
 ) -> dict:
     state = get_state()
     project = state.resolve_project(project_id)
@@ -154,7 +148,6 @@ async def get_task_result(
 async def cancel_task(
     task_id: str,
     project_id: str,
-    ctx: Context,
 ) -> dict:
     state = get_state()
     project = state.resolve_project(project_id)

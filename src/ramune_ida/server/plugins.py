@@ -6,20 +6,14 @@ registers an MCP tool function for each discovered tool.
 
 FastMCP coupling (verified against mcp 1.26.0)
 -----------------------------------------------
-This module relies on three FastMCP internal behaviours.  If a
+This module relies on two FastMCP internal behaviours.  If a
 future mcp release breaks registration, check these first:
 
 1. ``Tool.from_function`` reads ``inspect.signature(fn)`` to build
    a Pydantic arg model.  We satisfy this by setting
    ``_tool_fn.__signature__``.
 
-2. ``find_context_parameter`` (context_injection.py) uses
-   ``typing.get_type_hints(fn)`` — which reads ``__annotations__``
-   rather than ``__signature__`` — to locate the ``ctx: Context``
-   parameter.  We satisfy this by explicitly setting
-   ``_tool_fn.__annotations__``.
-
-3. ``func_metadata`` (func_metadata.py) iterates
+2. ``func_metadata`` (func_metadata.py) iterates
    ``signature.parameters`` and feeds them into
    ``pydantic.create_model``.  Our ``Annotated[T, Field(...)]``
    annotations are consumed here for descriptions / defaults.
@@ -34,7 +28,6 @@ import logging
 import os
 from typing import Annotated, Any
 
-from mcp.server.fastmcp import Context
 from pydantic import Field
 
 from ramune_ida.commands import PluginInvocation
@@ -166,11 +159,6 @@ def _register_one(meta: dict[str, Any]) -> None:
             annotation=str,
         ),
         *required_params,
-        inspect.Parameter(
-            "ctx",
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=Context,
-        ),
         *optional_params,
     ]
 
@@ -180,12 +168,7 @@ def _register_one(meta: dict[str, Any]) -> None:
     _default_timeout = default_timeout
 
     async def _tool_fn(**kwargs: Any) -> dict[str, Any]:
-        project_id: str = kwargs["project_id"]
-        kwargs.pop("project_id")
-        kwargs.pop("ctx", None)
-        # If handler declares its own "timeout" param, it stays in kwargs
-        # and gets forwarded; the project-level timeout is always the
-        # metadata top-level value (infrastructure ceiling).
+        project_id: str = kwargs.pop("project_id")
         timeout_val = float(_default_timeout)
 
         state = get_state()
@@ -197,20 +180,7 @@ def _register_one(meta: dict[str, Any]) -> None:
     _tool_fn.__name__ = tool_name
     _tool_fn.__qualname__ = tool_name
 
-    # Coupling point 1: FastMCP reads inspect.signature(fn) to build
-    # the Pydantic arg model (see module docstring).
     _tool_fn.__signature__ = sig  # type: ignore[attr-defined]
-
-    # Coupling point 2: FastMCP's find_context_parameter() uses
-    # typing.get_type_hints(fn) which reads __annotations__, NOT
-    # __signature__.  Without this, ctx won't be recognised as the
-    # Context injection point.
-    _tool_fn.__annotations__ = {
-        p.name: p.annotation
-        for p in sig.parameters.values()
-        if p.annotation is not inspect.Parameter.empty
-    }
-    _tool_fn.__annotations__["return"] = dict
 
     register_tool(description=description)(_tool_fn)
     log.info("Registered plugin tool: %s", tool_name)

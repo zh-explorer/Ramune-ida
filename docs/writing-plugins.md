@@ -11,7 +11,7 @@ Ramune-ida supports external plugins that add IDA analysis tools as MCP tools. P
 Ramune-ida uses a **metadata-driven plugin architecture**. Each tool is defined by two files:
 
 - `metadata.py` — declares the tool's name, description, parameters, tags, and timeout
-- `handlers.py` — implements the handler function that runs inside the IDA worker process
+- `__init__.py` — exports the handler functions by name (implementation can live in any file)
 
 At startup, the server spawns a worker subprocess with `--list-plugins`. The worker scans built-in tool packages (`core/`) and the external plugin directory, collects all metadata, and returns it as JSON. The server then dynamically generates MCP tool functions — complete with typed signatures, descriptions, and parameter validation — and registers them with FastMCP.
 
@@ -42,9 +42,8 @@ Create a folder in `~/.ramune-ida/plugins/`:
 ```
 ~/.ramune-ida/plugins/
 └── my_crypto/
-    ├── __init__.py
-    ├── metadata.py
-    └── handlers.py
+    ├── __init__.py      # exports identify_crypto
+    └── metadata.py      # TOOLS = [...]
 ```
 
 ### 1. Define metadata
@@ -68,10 +67,12 @@ TOOLS = [
 ]
 ```
 
-### 2. Implement handler
+### 2. Implement and export
+
+The handler function must be importable from the package by name. How you organize the code is up to you — inline in `__init__.py`, split into modules, whatever works:
 
 ```python
-# handlers.py
+# __init__.py
 from ramune_ida.core import ToolError
 
 def identify_crypto(params):
@@ -92,15 +93,6 @@ def identify_crypto(params):
     }
 ```
 
-### 3. Export from package
-
-```python
-# __init__.py
-from my_crypto.handlers import identify_crypto
-
-__all__ = ["identify_crypto"]
-```
-
 Restart the server. The tool will appear in the MCP tool list automatically.
 
 ---
@@ -116,7 +108,7 @@ Each entry in the `TOOLS` list:
 | `params` | dict | no | Parameter definitions (see below) |
 | `tags` | list[str] | no | Framework tags + custom tags |
 | `timeout` | int | no | Default timeout in seconds (default: 30) |
-| `handler` | str | no | Handler function name if different from `name` |
+| `handler` | str | no | Function name if different from `name` |
 
 Each parameter entry:
 
@@ -135,9 +127,9 @@ Tags are plain strings in the `tags` list. The framework recognizes tags with th
 |-----|---------|--------------------|
 | `kind:read` | Read-only operation | No side effects |
 | `kind:write` | Modifies the IDA database | Auto-creates an undo point before execution |
-| `kind:unsafe` | Destructive or irreversible | Auto-creates an undo point; marked in MCP schema |
+| `kind:unsafe` | Destructive or irreversible | No undo point — the tool/AI is responsible for consequences |
 
-Write tools get automatic undo support — if the AI makes a mistake, `undo` reverts the change. No explicit save/snapshot is needed for individual modifications.
+Write tools get automatic undo support — if the AI makes a mistake, `undo` reverts the change. Unsafe tools explicitly opt out of this: they mark operations that cannot be reliably undone (e.g. database repair, bulk destructive edits). The AI should use snapshots or other safeguards before calling unsafe tools.
 
 Custom tags (e.g. `"crypto"`, `"analysis"`) are passed through untouched and can be used for your own categorization.
 
@@ -208,7 +200,7 @@ Default: `~/.ramune-ida/plugins/`
 
 Override with the `RAMUNE_PLUGIN_DIR` environment variable or the `--plugin-dir` CLI option.
 
-The directory is scanned one level deep. Each sub-directory with a `metadata.py` is treated as a plugin package.
+The directory is scanned one level deep. Each sub-directory with a `metadata.py` is treated as a plugin package. The handler functions must be importable from the package (i.e. exported via `__init__.py`).
 
 ## Error Handling
 
@@ -266,9 +258,8 @@ Use a namespace prefix for your tools: `crypto_identify` rather than `identify`.
 ```
 ~/.ramune-ida/plugins/
 └── crypto_id/
-    ├── __init__.py
-    ├── metadata.py
-    └── handlers.py
+    ├── __init__.py      # exports crypto_identify, crypto_label
+    └── metadata.py
 ```
 
 **metadata.py**:
@@ -318,16 +309,16 @@ TOOLS = [
 ]
 ```
 
-**handlers.py**:
+**__init__.py**:
 
 ```python
 from ramune_ida.core import ToolError, resolve_addr
 
 KNOWN_SBOXES = { ... }  # algorithm → byte signature
 
+
 def crypto_identify(params):
     import ida_bytes
-    import ida_segment
     import idautils
 
     addr = params.get("addr")
@@ -367,12 +358,4 @@ def crypto_label(params):
     ida_bytes.set_cmt(ea, f"Identified as {algo} constant table", True)
 
     return {"addr": hex(ea), "label": f"{algo}_constant"}
-```
-
-**__init__.py**:
-
-```python
-from crypto_id.handlers import crypto_identify, crypto_label
-
-__all__ = ["crypto_identify", "crypto_label"]
 ```

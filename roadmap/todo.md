@@ -4,6 +4,14 @@
 
 ---
 
+## 基础设施
+
+- [ ] **tool call 批量化** — 支持单次请求中批量调用多个工具（如批量 rename、批量 set_type），减少 IPC 往返开销
+- [ ] **tag filter 系统** — 基于 tags 的工具可见性过滤，客户端可按 domain/kind 筛选工具列表（如只显示 `kind:read` 或隐藏 `kind:unsafe`）
+- [ ] **大文件上传流式写入** — `files.py` upload 端点改为分块流式写入磁盘，避免大文件全量读入内存
+
+---
+
 ## 新工具
 
 - [ ] resolve — VA ↔ 文件偏移 ↔ ASLR 运行时地址互转

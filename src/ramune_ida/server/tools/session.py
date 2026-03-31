@@ -82,8 +82,7 @@ async def open_database(
         "project_id": project_id,
         "status": task.status.value,
     }
-    if project.idb_path:
-        result["idb_path"] = project.idb_path
+    result["idb_path"] = project.idb_path
     if project.exe_path:
         result["exe_path"] = project.exe_path
     if not task.is_done:

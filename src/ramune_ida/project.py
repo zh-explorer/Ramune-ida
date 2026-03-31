@@ -307,7 +307,7 @@ class Project:
         Flushes to IDA component files and also packs a .i64 snapshot
         so that crash recovery can fall back to it.
         """
-        return await self.execute(SaveDatabase(idb_path=self.idb_path or ""))
+        return await self.execute(SaveDatabase(idb_path=self.idb_path))
 
     # ==================================================================
     # Task execution
@@ -373,6 +373,8 @@ class Project:
                 raise RuntimeError(
                     f"open_database failed: {resp.error.message}"
                 )
+            save_req = SaveDatabase(idb_path=self.idb_path).to_request("__save_init__")
+            await handle.execute(save_req)
         except Exception:
             handle.kill()
             self._limiter.on_destroyed(self.project_id)

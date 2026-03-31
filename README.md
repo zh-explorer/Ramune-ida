@@ -16,7 +16,7 @@ Ramune-ida runs IDA Pro (idalib) in headless mode and wraps it as an MCP server.
 
 **Process separation** — The MCP server and IDA run in separate processes. The server is pure async Python; each IDA worker is a single-threaded subprocess communicating via dedicated fd-pair pipes (JSON line protocol). This eliminates all thread-safety issues that plague IDA SDK usage.
 
-**Plugin architecture** — Tools are defined by metadata (description, parameters, tags) and handler functions. The server discovers tools at startup, dynamically generates MCP tool functions, and dispatches calls to the worker. Adding a new tool requires only a metadata file and a handler — no boilerplate registration code. External plugins are supported via a plugin folder.
+**Plugin architecture** — Tools are defined by metadata (description, parameters, tags) and handler functions. The server discovers tools at startup, dynamically generates MCP tool functions, and dispatches calls to the worker. Adding a new tool requires only a metadata file and a handler — no boilerplate registration code.
 
 **Worker is stateless** — Workers are disposable command executors. All management state (task queues, crash recovery) lives in the Project layer. If a worker crashes, the project spawns a new one and reopens the IDB transparently.
 
@@ -41,101 +41,34 @@ MCP Client (Claude / Cursor / ...)
 
 ## Tools
 
-### Session (7)
+Ramune-ida provides **26 tools** (19 plugin tools + 7 session tools) covering the core reverse engineering workflow:
 
-| Tool | Description |
-|------|-------------|
-| `open_project` | Create a new project workspace |
-| `close_project` | Destroy a project and clean up |
-| `projects` | List all open projects and their status |
-| `open_database` | Open a binary or IDB in the project |
-| `close_database` | Close the database and terminate IDA |
-| `get_task_result` | Poll the result of a long-running task |
-| `cancel_task` | Cancel a task |
+- **Session** (7) — project lifecycle, database open/close, async task management
+- **Analysis** (4) — decompile, disassemble, cross-references, binary overview
+- **Annotation** (3) — rename symbols, read/write comments
+- **Data** (2) — auto-detect address type, read raw bytes
+- **Listing** (4) — enumerate functions, strings, imports, names (with filtering/pagination)
+- **Search** (2) — regex search across strings/names/disasm, byte pattern search
+- **Types** (2) — set types on functions/variables, declare C types (struct/enum/typedef)
+- **Execution** (1) — run arbitrary IDAPython with stdout/stderr capture
+- **Undo** (1) — IDA 9.0+ native undo
 
-### Analysis (4)
+Low-frequency or exploratory operations are covered by `execute_python`, which provides full IDAPython access within the IDA environment.
 
-| Tool | Description |
-|------|-------------|
-| `decompile` | Decompile a function by name or address |
-| `disasm` | Disassemble instructions at an address |
-| `xrefs` | Get cross-references to an address |
-| `survey` | Binary overview — file info, segments, functions, imports, strings |
+## Features
 
-### Annotation (3)
-
-| Tool | Description |
-|------|-------------|
-| `rename` | Rename functions, globals, or local variables |
-| `get_comment` | Read disassembly or function header comment |
-| `set_comment` | Set disassembly or function header comment |
-
-### Data (2)
-
-| Tool | Description |
-|------|-------------|
-| `examine` | Auto-detect type at address (code, string, data, struct) |
-| `get_bytes` | Read raw bytes as hex string |
-
-### Listing (4)
-
-| Tool | Description |
-|------|-------------|
-| `list_funcs` | List functions with filtering and pagination |
-| `list_strings` | List strings found in the binary |
-| `list_imports` | List imported functions |
-| `list_names` | List all named addresses |
-
-### Search (2)
-
-| Tool | Description |
-|------|-------------|
-| `search` | Regex search across strings, names, types, disasm |
-| `search_bytes` | Binary byte pattern search with wildcards |
-
-### Type System (2)
-
-| Tool | Description |
-|------|-------------|
-| `set_type` | Set type on functions, globals, or local variables |
-| `define_type` | Declare C types (struct, enum, typedef, union) |
-
-### Execution (1)
-
-| Tool | Description |
-|------|-------------|
-| `execute_python` | Run arbitrary IDAPython with stdout/stderr capture |
-
-### Undo (1)
-
-| Tool | Description |
-|------|-------------|
-| `undo` | Undo recent modifications (IDA 9.0+ native undo) |
-
-**Total: 26 tools** (19 plugin tools + 7 session tools)
-
-## Infrastructure
-
-- **Plugin architecture**: metadata-driven tool discovery, dynamic MCP registration, external plugin folder (`~/.ramune-ida/plugins/`)
-- **Framework tags**: `kind:read` / `kind:write` / `kind:unsafe` — automatic undo points for write tools
-- **Graceful cancellation**: SIGUSR1 + `sys.setprofile` hook → 5s watchdog → SIGKILL fallback
-- **Output truncation**: oversized output truncated with HTTP download for full content
-- **MCP Resources**: project and file discovery
-- **File upload/download**: HTTP endpoints for binary and IDB transfer
+- **Metadata-driven plugin system** — tools auto-discovered at startup, dynamic MCP registration, external plugin folder support
+- **Framework tags** — `kind:read` / `kind:write` / `kind:unsafe` — write tools auto-create undo points
+- **Graceful cancellation** — SIGUSR1 + `sys.setprofile` hook → 5s watchdog → SIGKILL fallback
+- **Crash recovery** — auto-recover from IDA component files, fallback to `.i64`, periodic `.i64` packing
+- **Output truncation** — oversized output truncated with HTTP download for full content
+- **File upload/download** — HTTP endpoints for binary and IDB transfer
 
 ## Plugins
 
-Drop a plugin folder into `~/.ramune-ida/plugins/` (or set `RAMUNE_PLUGIN_DIR`) and restart. Tools appear automatically.
+Ramune-ida supports external plugins via `~/.ramune-ida/plugins/` (or `RAMUNE_PLUGIN_DIR`). Drop a plugin folder with `metadata.py` + `handlers.py` and restart — tools appear automatically.
 
-Each plugin is a Python package with `metadata.py` and `handlers.py`:
-
-```
-~/.ramune-ida/plugins/
-└── my_plugin/
-    ├── __init__.py     # from .handlers import my_tool
-    ├── metadata.py     # TOOLS = [{"name": "my_tool", ...}]
-    └── handlers.py     # def my_tool(params: dict) -> dict: ...
-```
+See [Writing Plugins](docs/writing-plugins.md) for the full guide, including metadata reference, framework tags, handler contract, security model, and a complete example.
 
 ## Quick Start
 

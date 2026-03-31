@@ -110,7 +110,7 @@ For Claude Desktop or Cursor, add to your MCP config:
 {
   "mcpServers": {
     "ramune-ida": {
-      "type": "streamable-http",
+      "type": "http",
       "url": "http://127.0.0.1:8000/mcp"
     }
   }

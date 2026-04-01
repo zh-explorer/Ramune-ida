@@ -127,6 +127,12 @@ async def call(mcp, name: str, args: dict[str, Any] | None = None) -> dict:
     raise ValueError(f"No text content in call_tool result: {result}")
 
 
+def get_work_dir(project_id: str) -> str:
+    """Get a project's work_dir from internal state (test-only)."""
+    state = app_module.get_state()
+    return state.projects[project_id].work_dir
+
+
 # ── Full workflow ─────────────────────────────────────────────────
 
 
@@ -138,9 +144,8 @@ async def test_full_workflow(mcp_app, tmp_path):
     r = await call(mcp, "open_project", {"project_id": "flow-test"})
     pid = r["project_id"]
     assert pid == "flow-test"
-    assert "work_dir" in r
 
-    work_dir = r["work_dir"]
+    work_dir = get_work_dir(pid)
     with open(os.path.join(work_dir, "sample.bin"), "wb") as f:
         f.write(b"\x7fELF" + b"\x00" * 100)
 
@@ -171,7 +176,6 @@ async def test_full_workflow(mcp_app, tmp_path):
 async def test_open_project_auto_id(mcp_app):
     r = await call(mcp_app, "open_project")
     assert "project_id" in r
-    assert "work_dir" in r
     assert len(r["project_id"]) == 8
 
 
@@ -200,8 +204,8 @@ async def test_open_project_duplicate_id(mcp_app):
 @pytest.mark.asyncio
 async def test_open_database_relative_path(mcp_app):
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "db-rel"})
-    work_dir = r["work_dir"]
+    await call(mcp, "open_project", {"project_id": "db-rel"})
+    work_dir = get_work_dir("db-rel")
 
     with open(os.path.join(work_dir, "test.bin"), "wb") as f:
         f.write(b"\x00" * 16)
@@ -215,8 +219,8 @@ async def test_open_database_relative_path(mcp_app):
 @pytest.mark.asyncio
 async def test_open_database_idb_path(mcp_app):
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "db-idb"})
-    work_dir = r["work_dir"]
+    await call(mcp, "open_project", {"project_id": "db-idb"})
+    work_dir = get_work_dir("db-idb")
 
     with open(os.path.join(work_dir, "analysis.i64"), "wb") as f:
         f.write(b"\x00" * 16)
@@ -239,8 +243,8 @@ async def test_open_database_unknown_project(mcp_app):
 @pytest.mark.asyncio
 async def test_close_database_graceful(mcp_app):
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "close-g"})
-    with open(os.path.join(r["work_dir"], "a.bin"), "wb") as f:
+    await call(mcp, "open_project", {"project_id": "close-g"})
+    with open(os.path.join(get_work_dir("close-g"), "a.bin"), "wb") as f:
         f.write(b"\x00")
 
     await call(mcp, "open_database", {"project_id": "close-g", "path": "a.bin"})
@@ -255,8 +259,8 @@ async def test_close_database_graceful(mcp_app):
 @pytest.mark.asyncio
 async def test_close_database_force(mcp_app):
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "close-f"})
-    with open(os.path.join(r["work_dir"], "a.bin"), "wb") as f:
+    await call(mcp, "open_project", {"project_id": "close-f"})
+    with open(os.path.join(get_work_dir("close-f"), "a.bin"), "wb") as f:
         f.write(b"\x00")
 
     await call(mcp, "open_database", {"project_id": "close-f", "path": "a.bin"})
@@ -278,8 +282,8 @@ async def test_close_database_no_worker(mcp_app):
 @pytest.mark.asyncio
 async def test_close_project_cleans_up(mcp_app):
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "clean"})
-    work_dir = r["work_dir"]
+    await call(mcp, "open_project", {"project_id": "clean"})
+    work_dir = get_work_dir("clean")
     assert os.path.isdir(work_dir)
 
     await call(mcp, "close_project", {"project_id": "clean"})
@@ -355,8 +359,8 @@ async def test_soft_limit_warning(mcp_app):
     mcp = mcp_app
     for i in range(3):
         pid = f"sl{i}"
-        r = await call(mcp, "open_project", {"project_id": pid})
-        with open(os.path.join(r["work_dir"], "a.bin"), "wb") as f:
+        await call(mcp, "open_project", {"project_id": pid})
+        with open(os.path.join(get_work_dir(pid), "a.bin"), "wb") as f:
             f.write(b"\x00")
         r = await call(mcp, "open_database", {"project_id": pid, "path": "a.bin"})
         if i >= 2:
@@ -414,8 +418,8 @@ async def test_restart_recovery(tmp_path):
 async def test_decompile(mcp_app):
     """decompile through MCP call_tool (mock worker echoes the command)."""
     mcp = mcp_app
-    r = await call(mcp, "open_project", {"project_id": "dec"})
-    work_dir = r["work_dir"]
+    await call(mcp, "open_project", {"project_id": "dec"})
+    work_dir = get_work_dir("dec")
     with open(os.path.join(work_dir, "a.bin"), "wb") as f:
         f.write(b"\x00")
     await call(mcp, "open_database", {"project_id": "dec", "path": "a.bin"})
@@ -432,8 +436,8 @@ async def test_decompile(mcp_app):
 
 async def _setup_project(mcp, pid: str = "pyexec") -> str:
     """Helper: create project + open database, return project_id."""
-    r = await call(mcp, "open_project", {"project_id": pid})
-    work_dir = r["work_dir"]
+    await call(mcp, "open_project", {"project_id": pid})
+    work_dir = get_work_dir(pid)
     with open(os.path.join(work_dir, "a.bin"), "wb") as f:
         f.write(b"\x00")
     await call(mcp, "open_database", {"project_id": pid, "path": "a.bin"})

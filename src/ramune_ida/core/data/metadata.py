@@ -15,11 +15,10 @@ TOOLS: list[dict] = [
                 "required": True,
                 "description": "Address or name",
             },
-            "size": {
+            "count": {
                 "type": "integer",
                 "required": False,
-                "default": 16,
-                "description": "Bytes to read for unknown regions",
+                "description": "Limit number of elements for arrays, or bytes to read for unknown regions. 0 or omit for no limit.",
             },
         },
     },

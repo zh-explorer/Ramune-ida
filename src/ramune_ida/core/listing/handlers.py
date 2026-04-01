@@ -10,35 +10,31 @@ itself can be imported safely without IDA (e.g. during --list-plugins).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 
-def _paginate(
-    items: list[dict[str, Any]],
-    filter_str: str,
-    match_key: str,
-    offset: int,
-    count: int,
-) -> dict[str, Any]:
-    """Apply substring filter + pagination, return wrapped result."""
-    if filter_str:
-        fl = filter_str.lower()
-        items = [i for i in items if fl in str(i.get(match_key, "")).lower()]
-    total = len(items)
-    return {
-        "total": total,
-        "offset": offset,
-        "count": count,
-        "items": items[offset : offset + count],
-    }
+def _make_predicate(filter_str: str, exclude_str: str) -> Callable[[str], bool] | None:
+    """Return a ``str -> bool`` predicate for substring include/exclude."""
+    fl = filter_str.lower() if filter_str else ""
+    ex = exclude_str.lower() if exclude_str else ""
+    if fl and ex:
+        return lambda v: fl in v.lower() and ex not in v.lower()
+    if fl:
+        return lambda v: fl in v.lower()
+    if ex:
+        return lambda v: ex not in v.lower()
+    return None
 
 
-def _extract_pagination(params: dict[str, Any]) -> tuple[str, int, int]:
-    """Extract common filter/offset/count from params."""
+def _extract_filter(params: dict[str, Any]) -> tuple[str, str]:
+    """Extract common filter/exclude from params."""
     filter_str = params.get("filter") or ""
-    offset = params.get("offset", 0) or 0
-    count = params.get("count", 100) or 100
-    return filter_str, int(offset), int(count)
+    exclude_str = params.get("exclude") or ""
+    return filter_str, exclude_str
+
+
+def _wrap(items: list[dict[str, Any]]) -> dict[str, Any]:
+    return {"total": len(items), "items": items}
 
 
 def list_funcs(params: dict[str, Any]) -> dict[str, Any]:
@@ -47,37 +43,51 @@ def list_funcs(params: dict[str, Any]) -> dict[str, Any]:
     import idautils
     import idc
 
-    filter_str, offset, count = _extract_pagination(params)
+    pred = _make_predicate(*_extract_filter(params))
 
     items: list[dict[str, Any]] = []
     for ea in idautils.Functions():
         name = idc.get_name(ea, 0) or ""
+        if pred and not pred(name):
+            continue
         func = idaapi.get_func(ea)
         size = (func.end_ea - func.start_ea) if func else 0
         items.append({"addr": hex(ea), "name": name, "size": size})
 
-    return _paginate(items, filter_str, "name", offset, count)
+    return _wrap(items)
 
 
 def list_strings(params: dict[str, Any]) -> dict[str, Any]:
     """List strings found in the binary."""
     import idautils
 
-    filter_str, offset, count = _extract_pagination(params)
+    pred = _make_predicate(*_extract_filter(params))
+    start_ea = params.get("start_ea")
+    end_ea = params.get("end_ea")
+    if start_ea is not None:
+        start_ea = int(start_ea, 16) if isinstance(start_ea, str) else int(start_ea)
+    if end_ea is not None:
+        end_ea = int(end_ea, 16) if isinstance(end_ea, str) else int(end_ea)
 
     items: list[dict[str, Any]] = []
     for s in idautils.Strings():
+        if start_ea is not None and s.ea < start_ea:
+            continue
+        if end_ea is not None and s.ea >= end_ea:
+            continue
         value = str(s)
+        if pred and not pred(value):
+            continue
         items.append({"addr": hex(s.ea), "value": value, "length": s.length})
 
-    return _paginate(items, filter_str, "value", offset, count)
+    return _wrap(items)
 
 
 def list_imports(params: dict[str, Any]) -> dict[str, Any]:
     """List imported functions (flat, with module field)."""
     import ida_nalt
 
-    filter_str, offset, count = _extract_pagination(params)
+    pred = _make_predicate(*_extract_filter(params))
 
     items: list[dict[str, Any]] = []
     for i in range(ida_nalt.get_import_module_qty()):
@@ -90,28 +100,30 @@ def list_imports(params: dict[str, Any]) -> dict[str, Any]:
             ordinal: int,
             _out: list = collected,
             _mod: str = mod_name,
+            _pred: Callable | None = pred,
         ) -> bool:
-            _out.append({
-                "module": _mod,
-                "name": name or ("ord#%d" % ordinal),
-                "addr": hex(ea),
-            })
+            n = name or ("ord#%d" % ordinal)
+            if _pred and not _pred(n):
+                return True
+            _out.append({"module": _mod, "name": n, "addr": hex(ea)})
             return True
 
         ida_nalt.enum_import_names(i, _cb)
         items.extend(collected)
 
-    return _paginate(items, filter_str, "name", offset, count)
+    return _wrap(items)
 
 
 def list_names(params: dict[str, Any]) -> dict[str, Any]:
     """List all named addresses."""
     import idautils
 
-    filter_str, offset, count = _extract_pagination(params)
+    pred = _make_predicate(*_extract_filter(params))
 
     items: list[dict[str, Any]] = []
     for ea, name in idautils.Names():
+        if pred and not pred(name):
+            continue
         items.append({"addr": hex(ea), "name": name})
 
-    return _paginate(items, filter_str, "name", offset, count)
+    return _wrap(items)

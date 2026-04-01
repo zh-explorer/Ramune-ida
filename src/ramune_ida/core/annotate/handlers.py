@@ -54,12 +54,12 @@ def _rename_global_or_func(addr_str: str, new_name: str) -> dict[str, Any]:
     if conflict_ea != idaapi.BADADDR and conflict_ea != ea:
         raise ToolError(
             -14,
-            "Name '%s' already used at %s" % (new_name, hex(conflict_ea)),
+            "get_name_ea(BADADDR, '%s') returned %s, name conflict" % (new_name, hex(conflict_ea)),
         )
 
     ok = idaapi.set_name(ea, new_name, idaapi.SN_CHECK)
     if not ok:
-        raise ToolError(-14, "Rename failed for %s" % hex(ea))
+        raise ToolError(-14, "set_name(%s, '%s', SN_CHECK) returned False" % (hex(ea), new_name))
 
     target_type = "function" if idaapi.get_func(ea) is not None else "global"
     return {
@@ -81,14 +81,14 @@ def _rename_local(
     ea = resolve_addr(func_str)
     func = ida_funcs.get_func(ea)
     if func is None:
-        raise ToolError(-12, "%s is not inside a function" % hex(ea))
+        raise ToolError(-12, "get_func(%s) returned None" % hex(ea))
 
     ok = ida_hexrays.rename_lvar(func.start_ea, var_name, new_name)
     if not ok:
         raise ToolError(
             -14,
-            "Cannot rename '%s' in %s — variable not found or name invalid"
-            % (var_name, hex(func.start_ea)),
+            "rename_lvar(%s, '%s', '%s') returned False"
+            % (hex(func.start_ea), var_name, new_name),
         )
 
     return {
@@ -112,7 +112,7 @@ def get_comment(params: dict[str, Any]) -> dict[str, Any]:
         ea = resolve_addr(func_str)
         func = ida_funcs.get_func(ea)
         if func is None:
-            raise ToolError(-12, "%s is not a function" % hex(ea))
+            raise ToolError(-12, "get_func(%s) returned None" % hex(ea))
         regular = idc.get_func_cmt(func.start_ea, 0) or ""
         repeatable = idc.get_func_cmt(func.start_ea, 1) or ""
         result: dict[str, Any] = {
@@ -162,10 +162,10 @@ def set_comment(params: dict[str, Any]) -> dict[str, Any]:
         ea = resolve_addr(func_str)
         func = ida_funcs.get_func(ea)
         if func is None:
-            raise ToolError(-12, "%s is not a function" % hex(ea))
+            raise ToolError(-12, "get_func(%s) returned None" % hex(ea))
         ok = idc.set_func_cmt(func.start_ea, comment, 0)
         if not ok:
-            raise ToolError(-14, "Failed to set function comment at %s" % hex(func.start_ea))
+            raise ToolError(-14, "set_func_cmt(%s, ..., 0) returned False" % hex(func.start_ea))
         return {
             "func": hex(func.start_ea),
             "name": ida_funcs.get_func_name(func.start_ea),
@@ -176,7 +176,7 @@ def set_comment(params: dict[str, Any]) -> dict[str, Any]:
         ea = resolve_addr(addr_str)
         ok = idc.set_cmt(ea, comment, 0)
         if not ok:
-            raise ToolError(-14, "Failed to set comment at %s" % hex(ea))
+            raise ToolError(-14, "set_cmt(%s, ..., 0) returned False" % hex(ea))
         return {"addr": hex(ea), "comment": comment or None}
 
     raise ToolError(

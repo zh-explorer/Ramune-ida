@@ -49,5 +49,5 @@ def resolve_addr(name_or_hex: str) -> int:
 
     addr = ida_name.get_name_ea(0, name_or_hex)
     if addr == 0xFFFFFFFFFFFFFFFF:  # BADADDR
-        raise ToolError(-12, "Cannot resolve '%s'" % name_or_hex)
+        raise ToolError(-12, "get_name_ea(0, '%s') returned BADADDR" % name_or_hex)
     return addr

@@ -487,16 +487,15 @@ def test_execute_python_basic(worker, binary):
     worker.send({"id": "99", "method": "close_database", "params": {}})
 
 
-def test_execute_python_timeout(worker, binary):
-    """Hard timeout via SIGALRM stops execution."""
+def test_execute_python_no_timeout(worker, binary):
+    """execute_python runs without hard timeout; cancel handles long tasks."""
     worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
 
     r = worker.send({"id": "2", "method": "plugin:execute_python", "params": {
-        "code": "import time\nwhile True: time.sleep(0.1)",
-        "timeout": 1,
+        "code": "_result = 42",
     }})
     assert "error" not in r
-    assert "timed out" in r["result"]["error"].lower()
+    assert r["result"]["result"] == 42
 
     worker.send({"id": "99", "method": "close_database", "params": {}})
 
@@ -573,20 +572,15 @@ def test_list_funcs_filter(worker, binary):
     worker.send({"id": "99", "method": "close_database", "params": {}})
 
 
-def test_list_funcs_pagination(worker, binary):
-    """list_funcs offset/count pagination works."""
+def test_list_funcs_exclude(worker, binary):
+    """list_funcs exclude filters out matching items."""
     worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
 
-    r_all = worker.send({"id": "2", "method": "plugin:list_funcs",
-                          "params": {"count": 999}})
-    total = r_all["result"]["total"]
-
-    r_page = worker.send({"id": "3", "method": "plugin:list_funcs",
-                           "params": {"offset": 1, "count": 2}})
-    assert r_page["result"]["total"] == total
-    assert len(r_page["result"]["items"]) <= 2
-    if total > 1:
-        assert r_page["result"]["items"][0] == r_all["result"]["items"][1]
+    r = worker.send({"id": "2", "method": "plugin:list_funcs",
+                      "params": {"exclude": "main"}})
+    assert "error" not in r
+    for item in r["result"]["items"]:
+        assert "main" not in item["name"].lower()
 
     worker.send({"id": "99", "method": "close_database", "params": {}})
 
@@ -808,7 +802,7 @@ def test_examine_string(worker, binary):
 
     # First find a string address
     r = worker.send({"id": "2", "method": "plugin:list_strings",
-                      "params": {"count": 1}})
+                      "params": {}})
     items = r["result"]["items"]
     if not items:
         worker.send({"id": "99", "method": "close_database", "params": {}})

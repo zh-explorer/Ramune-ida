@@ -10,6 +10,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import os
 from urllib.parse import urlparse
 
 
@@ -34,6 +35,10 @@ def parse_transport_url(url: str) -> tuple[str, str, int]:
 
 
 def main() -> None:
+    from ramune_ida.config import DEFAULT_DATA_DIR, ENV_DATA_DIR
+
+    env_data_dir = os.environ.get(ENV_DATA_DIR)
+
     parser = argparse.ArgumentParser(
         prog="ramune-ida",
         description="Headless IDA MCP Server",
@@ -57,8 +62,11 @@ def main() -> None:
         help="Python interpreter for Worker subprocesses (default: python)",
     )
     parser.add_argument(
-        "--work-dir", default="~/.ramune-ida/projects",
-        help="Base directory for project work dirs (default: ~/.ramune-ida/projects)",
+        "--data-dir", default=env_data_dir or DEFAULT_DATA_DIR,
+        help=(
+            "Base directory for projects and plugins "
+            f"(env: {ENV_DATA_DIR}, default: {DEFAULT_DATA_DIR})"
+        ),
     )
     parser.add_argument(
         "--auto-save-interval", type=float, default=300.0,
@@ -79,7 +87,7 @@ def main() -> None:
         soft_limit=args.soft_limit,
         hard_limit=args.hard_limit,
         auto_save_interval=args.auto_save_interval,
-        work_base_dir=args.work_dir,
+        data_dir=args.data_dir,
         output_max_length=args.output_max_length,
     )
     configure(config)
@@ -87,7 +95,10 @@ def main() -> None:
     transport, host, port = parse_transport_url(args.url)
     mcp.settings.host = host
     mcp.settings.port = port
-    mcp.run(transport=transport)
+    try:
+        mcp.run(transport=transport)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

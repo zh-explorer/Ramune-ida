@@ -111,8 +111,9 @@ async def call(mcp_app, name: str, args: dict[str, Any] | None = None) -> dict:
 
 
 async def _setup(mcp_app, pid: str) -> str:
-    r = await call(mcp_app, "open_project", {"project_id": pid})
-    work_dir = r["work_dir"]
+    await call(mcp_app, "open_project", {"project_id": pid})
+    state = app_module.get_state()
+    work_dir = state.projects[pid].work_dir
     with open(os.path.join(work_dir, "a.bin"), "wb") as f:
         f.write(b"\x00")
     await call(mcp_app, "open_database", {"project_id": pid, "path": "a.bin"})

@@ -15,13 +15,6 @@ TOOLS: list[dict] = [
                 "required": True,
                 "description": "Assign _result for structured return",
             },
-            "timeout": {
-                "type": "integer",
-                "required": False,
-                "default": 30,
-                "description": "Time limit in seconds",
-            },
         },
-        "timeout": 3,
     },
 ]

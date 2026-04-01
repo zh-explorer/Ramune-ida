@@ -28,7 +28,7 @@ def decompile(params: dict[str, Any]) -> dict[str, Any]:
 
     func_obj = ida_funcs.get_func(addr)
     if func_obj is None:
-        raise ToolError(-12, "%s is not a function" % hex(addr))
+        raise ToolError(-12, "get_func(%s) returned None" % hex(addr))
 
     try:
         cfunc = ida_hexrays.decompile(func_obj.start_ea)
@@ -36,7 +36,7 @@ def decompile(params: dict[str, Any]) -> dict[str, Any]:
         raise ToolError(-13, str(exc))
 
     if cfunc is None:
-        raise ToolError(-13, "No result for %s" % hex(func_obj.start_ea))
+        raise ToolError(-13, "decompile(%s) returned None" % hex(func_obj.start_ea))
 
     return {
         "addr": hex(func_obj.start_ea),
@@ -68,7 +68,7 @@ def disasm(params: dict[str, Any]) -> dict[str, Any]:
         lines.append(idc.GetDisasm(cur))
         cur += length
 
-    return {"start_addr": hex(addr), "disasm": "\n".join(lines)}
+    return {"start_addr": hex(addr), "count": len(lines), "disasm": "\n".join(lines)}
 
 
 def xrefs(params: dict[str, Any]) -> dict[str, Any]:
@@ -93,7 +93,7 @@ def xrefs(params: dict[str, Any]) -> dict[str, Any]:
         else:
             lines.append(f"{frm:#x}")
 
-    return {"addr": hex(addr), "xrefs": "\n".join(lines)}
+    return {"addr": hex(addr), "total": len(lines), "xrefs": "\n".join(lines)}
 
 
 # ── filetype constant → human-readable name ──────────────────────

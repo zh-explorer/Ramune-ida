@@ -79,15 +79,20 @@ Concepts:
 - project_id: returned by open_project(), required by all other tools.
 
 File transfer: server and client do not share a filesystem.
-Upload and download use the SAME host:port as the MCP endpoint (default http://127.0.0.1:8000).
-  Upload:   POST http://<host>:<port>/files/{project_id}  (multipart, field name "file")
-  Download: GET  http://<host>:<port>/files/{project_id}/{filename}
+Upload and download share the same base URL as the MCP endpoint.
+  Upload:   POST <mcp_url>/files/{project_id}  (multipart form, field name "file")
+  Download: GET  <mcp_url>/files/{project_id}/{filename}
+  Example:  curl -F file=@./binary <mcp_url>/files/{project_id}
 open_database path is relative to work_dir — just use the filename you uploaded.
 
 Workflow: open_project → upload binary → open_database → analyze → close_project.
 The IDA worker is started lazily: if it has exited or crashed, the next tool call
 automatically restarts it and reopens the database. You do NOT need to call
 open_database again after a restart or between analysis commands.
+
+Multiple binaries: open a separate project for each binary. Each project runs
+its own isolated IDA process — they do not interfere with each other and can
+run in parallel.
 
 Long-running operations return a task_id when they time out. Poll with get_task_result.
 If a tool cannot handle your request, use execute_python to run arbitrary IDAPython.

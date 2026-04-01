@@ -1,0 +1,12 @@
+.git
+.venv
+__pycache__
+*.pyc
+.pdm-python
+pdm.lock
+.pytest_cache
+tests/
+roadmap/
+*.md
+!README.md
+.cursor/

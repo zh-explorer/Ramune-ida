@@ -19,11 +19,8 @@ license = {text = "MIT"}
 ramune-ida = "ramune_ida.cli:main"
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-[tool.pdm]
-distribution = true
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project.optional-dependencies]
 worker = ["idapro>=0.0.7"]

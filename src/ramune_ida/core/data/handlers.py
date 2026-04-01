@@ -23,7 +23,7 @@ def examine(params: dict[str, Any]) -> dict[str, Any]:
     addr_str = params.get("addr", "")
     if not addr_str:
         raise ToolError(-4, "Missing required parameter: addr")
-    size = int(params.get("size", 16) or 16)
+    max_count = int(params.get("count", 0) or 0)
 
     ea = resolve_addr(addr_str)
     flags = ida_bytes.get_flags(ea)
@@ -39,20 +39,52 @@ def examine(params: dict[str, Any]) -> dict[str, Any]:
         result["value"] = idc.GetDisasm(ea)
 
     elif ida_bytes.is_data(flags):
+        item_sz = idc.get_item_size(ea)
         if ida_bytes.is_qword(flags):
-            result["type"] = "qword"
-            result["value"] = idc.get_qword(ea)
+            elem_sz = 8
+            n = item_sz // elem_sz
+            if n > 1:
+                n = min(n, max_count) if max_count else n
+                result["type"] = "qword[]"
+                result["count"] = n
+                result["values"] = [idc.get_qword(ea + i * elem_sz) for i in range(n)]
+            else:
+                result["type"] = "qword"
+                result["value"] = idc.get_qword(ea)
         elif ida_bytes.is_dword(flags):
-            result["type"] = "dword"
-            result["value"] = idc.get_wide_dword(ea)
+            elem_sz = 4
+            n = item_sz // elem_sz
+            if n > 1:
+                n = min(n, max_count) if max_count else n
+                result["type"] = "dword[]"
+                result["count"] = n
+                result["values"] = [idc.get_wide_dword(ea + i * elem_sz) for i in range(n)]
+            else:
+                result["type"] = "dword"
+                result["value"] = idc.get_wide_dword(ea)
         elif ida_bytes.is_word(flags):
-            result["type"] = "word"
-            result["value"] = idc.get_wide_word(ea)
+            elem_sz = 2
+            n = item_sz // elem_sz
+            if n > 1:
+                n = min(n, max_count) if max_count else n
+                result["type"] = "word[]"
+                result["count"] = n
+                result["values"] = [idc.get_wide_word(ea + i * elem_sz) for i in range(n)]
+            else:
+                result["type"] = "word"
+                result["value"] = idc.get_wide_word(ea)
         elif ida_bytes.is_byte(flags):
-            result["type"] = "byte"
-            result["value"] = idc.get_wide_byte(ea)
+            n = item_sz
+            if n > 1:
+                n = min(n, max_count) if max_count else n
+                result["type"] = "byte[]"
+                result["count"] = n
+                raw = ida_bytes.get_bytes(ea, n)
+                result["values"] = list(raw) if raw else []
+            else:
+                result["type"] = "byte"
+                result["value"] = idc.get_wide_byte(ea)
         else:
-            item_sz = idc.get_item_size(ea)
             raw = ida_bytes.get_bytes(ea, item_sz) if item_sz > 0 else b""
             result["type"] = "data"
             result["value"] = raw.hex() if raw else ""
@@ -66,10 +98,11 @@ def examine(params: dict[str, Any]) -> dict[str, Any]:
         result["size"] = item_sz
 
     else:
-        raw = ida_bytes.get_bytes(ea, size)
+        n = max_count if max_count else 16
+        raw = ida_bytes.get_bytes(ea, n)
         result["type"] = "unknown"
         result["value"] = raw.hex() if raw else ""
-        result["size"] = size
+        result["count"] = n
 
     return result
 
@@ -89,6 +122,6 @@ def get_bytes(params: dict[str, Any]) -> dict[str, Any]:
     ea = resolve_addr(addr_str)
     raw = ida_bytes.get_bytes(ea, size)
     if raw is None:
-        raise ToolError(-12, "Cannot read %d bytes at %s" % (size, hex(ea)))
+        raise ToolError(-12, "get_bytes(%s, %d) returned None" % (hex(ea), size))
 
     return {"addr": hex(ea), "size": size, "bytes": raw.hex()}

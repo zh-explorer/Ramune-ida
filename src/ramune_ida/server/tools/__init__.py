@@ -13,7 +13,7 @@ from ramune_ida.server.tools import session
 # ── Project lifecycle ─────────────────────────────────────────────
 
 register_tool(
-    description="Create a new project workspace. Returns project_id and work_dir.",
+    description="Create a new project workspace. Returns project_id.",
 )(session.open_project)
 
 register_tool(
@@ -27,7 +27,11 @@ register_tool(
 # ── Database lifecycle ────────────────────────────────────────────
 
 register_tool(
-    description="Open a binary or IDB in the project.",
+    description=(
+        "Open a binary or IDB in the project. "
+        "Returns a survey of the binary (arch, segments, function stats, imports) "
+        "so you can start analysis immediately without a separate survey call."
+    ),
 )(session.open_database)
 
 register_tool(

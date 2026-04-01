@@ -52,7 +52,7 @@ def _parse_tinfo(text: str) -> Any:
     except Exception:
         pass
 
-    raise ToolError(-4, "Unable to parse type: %s" % text)
+    raise ToolError(-4, "parse_decl failed for: %s" % text)
 
 
 def set_type(params: dict[str, Any]) -> dict[str, Any]:
@@ -107,12 +107,12 @@ def _set_type_addr(addr_str: str, type_str: str) -> dict[str, Any]:
             tif = _parse_tinfo(type_str)
             ok = ida_typeinf.apply_tinfo(ea, tif, ida_typeinf.PT_SIL)
         if not ok:
-            raise ToolError(-14, "Failed to set type at %s" % hex(ea))
+            raise ToolError(-14, "apply_tinfo(%s, ...) returned False" % hex(ea))
     else:
         tif = _parse_tinfo(type_str)
         ok = ida_typeinf.apply_tinfo(ea, tif, ida_typeinf.PT_SIL)
         if not ok:
-            raise ToolError(-14, "Failed to set type at %s" % hex(ea))
+            raise ToolError(-14, "apply_tinfo(%s, ...) returned False" % hex(ea))
 
     new_tif = ida_typeinf.tinfo_t()
     ida_nalt.get_tinfo(new_tif, ea)
@@ -136,11 +136,11 @@ def _set_type_local(
     ea = resolve_addr(func_str)
     func = ida_funcs.get_func(ea)
     if func is None:
-        raise ToolError(-12, "%s is not inside a function" % hex(ea))
+        raise ToolError(-12, "get_func(%s) returned None" % hex(ea))
 
     cfunc = ida_hexrays.decompile(func.start_ea)
     if cfunc is None:
-        raise ToolError(-12, "Decompilation failed for %s" % hex(func.start_ea))
+        raise ToolError(-12, "decompile(%s) returned None" % hex(func.start_ea))
 
     target_lv = None
     for lv in cfunc.lvars:
@@ -151,7 +151,7 @@ def _set_type_local(
     if target_lv is None:
         raise ToolError(
             -12,
-            "Variable '%s' not found in %s" % (var_name, hex(func.start_ea)),
+            "lvar '%s' not found in cfunc.lvars at %s" % (var_name, hex(func.start_ea)),
         )
 
     old_type = str(target_lv.type())
@@ -211,9 +211,9 @@ def define_type(params: dict[str, Any]) -> dict[str, Any]:
             types.append(entry)
 
     if errors > 0 and not types:
-        raise ToolError(-14, "Declaration failed (%d error(s))" % errors)
+        raise ToolError(-14, "parse_decls returned %d error(s), 0 types defined" % errors)
 
-    result: dict[str, Any] = {"errors": errors, "types": types}
+    result: dict[str, Any] = {"total": len(types), "errors": errors, "types": types}
     if errors > 0:
         result["warning"] = "%d parse error(s); some types may not have been created" % errors
     return result

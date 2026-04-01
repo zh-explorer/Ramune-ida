@@ -12,8 +12,18 @@ from typing import Annotated, Any
 
 from pydantic import Field
 
-from ramune_ida.commands import CloseDatabase, Ping
+from ramune_ida.commands import CloseDatabase, PluginInvocation, Ping
 from ramune_ida.server.app import get_state
+
+
+def _rel(path: str | None, work_dir: str) -> str | None:
+    """Strip work_dir prefix, returning a relative name for the client."""
+    if path is None:
+        return None
+    try:
+        return os.path.relpath(path, work_dir)
+    except ValueError:
+        return os.path.basename(path)
 
 
 # ── Project lifecycle ─────────────────────────────────────────────
@@ -26,7 +36,6 @@ async def open_project(
     project = state.open_project(project_id)
     return {
         "project_id": project.project_id,
-        "work_dir": project.work_dir,
     }
 
 
@@ -44,8 +53,8 @@ async def projects() -> dict:
     for pid, project in state.projects.items():
         entry: dict[str, Any] = {
             "project_id": pid,
-            "exe_path": project.exe_path,
-            "idb_path": project.idb_path,
+            "exe_path": _rel(project.exe_path, project.work_dir),
+            "idb_path": _rel(project.idb_path, project.work_dir),
             "has_worker": project._handle is not None,
             "has_database": project.has_database,
         }
@@ -78,11 +87,21 @@ async def open_database(
         "project_id": project_id,
         "status": task.status.value,
     }
-    result["idb_path"] = project.idb_path
+    result["idb_path"] = _rel(project.idb_path, project.work_dir)
     if project.exe_path:
-        result["exe_path"] = project.exe_path
+        result["exe_path"] = _rel(project.exe_path, project.work_dir)
     if not task.is_done:
         result["task_id"] = task.task_id
+
+    try:
+        survey_task = await project.execute(
+            PluginInvocation("survey", {}), timeout=30.0
+        )
+        if survey_task.result:
+            result["survey"] = survey_task.result
+    except Exception:
+        pass
+
     if state.limiter.over_soft_limit:
         result["warning"] = (
             f"Instance count ({state.limiter.instance_count}) "

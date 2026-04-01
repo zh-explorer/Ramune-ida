@@ -47,7 +47,7 @@ Ramune-ida provides **26 tools** (19 plugin tools + 7 session tools) covering th
 - **Analysis** (4) — decompile, disassemble, cross-references, binary overview
 - **Annotation** (3) — rename symbols, read/write comments
 - **Data** (2) — auto-detect address type, read raw bytes
-- **Listing** (4) — enumerate functions, strings, imports, names (with filtering/pagination)
+- **Listing** (4) — enumerate functions, strings, imports, names (with filtering)
 - **Search** (2) — regex search across strings/names/disasm, byte pattern search
 - **Types** (2) — set types on functions/variables, declare C types (struct/enum/typedef)
 - **Execution** (1) — run arbitrary IDAPython with stdout/stderr capture
@@ -66,7 +66,7 @@ Low-frequency or exploratory operations are covered by `execute_python`, which p
 
 ## Plugins
 
-Ramune-ida supports external plugins via `~/.ramune-ida/plugins/` (or `RAMUNE_PLUGIN_DIR`). Drop a plugin folder with `metadata.py` + `handlers.py` and restart — tools appear automatically.
+Ramune-ida supports external plugins via `<data-dir>/plugins/` (default `~/.ramune-ida/plugins/`). Drop a plugin folder with `metadata.py` + `handlers.py` and restart — tools appear automatically.
 
 See [Writing Plugins](docs/writing-plugins.md) for the full guide, including metadata reference, framework tags, handler contract, security model, and a complete example.
 
@@ -76,31 +76,62 @@ See [Writing Plugins](docs/writing-plugins.md) for the full guide, including met
 
 - Python >= 3.10
 - IDA Pro 9.0+ with idalib
-- PDM (package manager)
+- [uv](https://docs.astral.sh/uv/) (package manager)
 
 ### Install
 
 ```bash
 git clone https://github.com/user/Ramune-ida.git
 cd Ramune-ida
-pdm install
+uv sync
 ```
 
 ### Run
 
 ```bash
 # Default: Streamable HTTP on 127.0.0.1:8000
-ramune-ida
+uv run ramune-ida
 
 # Specify host and port
-ramune-ida http://0.0.0.0:8745
+uv run ramune-ida http://0.0.0.0:8745
 
 # Use IDA's bundled Python for workers
-ramune-ida --worker-python /opt/ida/python3
+uv run ramune-ida --worker-python /opt/ida/python3
 
 # SSE transport (legacy MCP clients)
-ramune-ida sse://127.0.0.1:9000
+uv run ramune-ida sse://127.0.0.1:9000
 ```
+
+### Docker
+
+Requires a pre-built `ida-pro:latest` base image with IDA Pro installed (see [docker-ida](https://github.com/user/docker-ida)).
+
+```bash
+# Build
+docker build -t ramune-ida .
+
+# Run (default: http://0.0.0.0:8000)
+docker run -p 8000:8000 ramune-ida
+
+# With custom settings
+docker run -p 8745:8745 \
+  -e TRANSPORT="http://0.0.0.0:8745" \
+  -e SOFT_LIMIT=2 \
+  -e HARD_LIMIT=4 \
+  ramune-ida
+
+# Persist data directory (projects + plugins)
+docker run -p 8000:8000 \
+  -v /path/to/data:/data/ramune-ida \
+  ramune-ida
+```
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `TRANSPORT` | `http://0.0.0.0:8000` | Transport URL |
+| `SOFT_LIMIT` | `4` | Advisory threshold for concurrent workers |
+| `HARD_LIMIT` | `8` | Maximum concurrent workers |
+| `RAMUNE_DATA_DIR` | `/data/ramune-ida` | Data directory (projects + plugins) |
 
 ### MCP Client Configuration
 
@@ -130,6 +161,15 @@ For Claude Desktop or Cursor, add to your MCP config:
 8. close_project(project_id)               → clean up
 ```
 
+## Directory Layout
+
+All data is stored under a single data directory (default `~/.ramune-ida`, configurable via `--data-dir` or `RAMUNE_DATA_DIR`):
+
+| Path | Description |
+|---|---|
+| `<data-dir>/projects/` | Project work directories (IDB files, outputs) |
+| `<data-dir>/plugins/` | External plugin folder |
+
 ## CLI Options
 
 | Option | Default | Description |
@@ -138,7 +178,7 @@ For Claude Desktop or Cursor, add to your MCP config:
 | `--worker-python` | `python` | Python interpreter for IDA workers |
 | `--soft-limit` | `4` | Advisory threshold for concurrent workers |
 | `--hard-limit` | `8` | Maximum concurrent workers (0 = unlimited) |
-| `--work-dir` | `~/.ramune-ida/projects` | Base directory for project files |
+| `--data-dir` | `~/.ramune-ida` | Data directory for projects and plugins (`RAMUNE_DATA_DIR`) |
 | `--auto-save-interval` | `300` | Seconds between auto-saves (0 = disabled) |
 | `--output-max-length` | `50000` | Truncate tool output beyond this many chars |
 

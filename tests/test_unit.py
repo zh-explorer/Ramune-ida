@@ -335,6 +335,7 @@ class TestOutputStore:
         assert result["num"] == 42
         assert "truncated" in result["long"]
         assert result["long"].startswith("x" * 20)
+        assert "/files/p/outputs/" in result["long"]
 
     def test_process_truncates_long_list(self, tmp_path):
         store = OutputStore(max_length=500)

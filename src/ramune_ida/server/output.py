@@ -65,7 +65,7 @@ class OutputStore:
 
         url = self._save_full_json(data, project_id, output_dir)
 
-        data = self._truncate_strings(data)
+        data = self._truncate_strings(data, url)
         if self._measure(data) <= self._max_length:
             return data
 
@@ -128,19 +128,19 @@ class OutputStore:
 
         return _make_url(project_id, output_id, ".json")
 
-    def _truncate_strings(self, data: Any) -> Any:
+    def _truncate_strings(self, data: Any, url: str) -> Any:
         """Phase 1: recursively shorten strings longer than preview_length."""
         if isinstance(data, str):
             if len(data) > self._preview_length:
                 return (
                     data[: self._preview_length]
-                    + f"\n\n... [truncated {len(data)} chars, see full output]"
+                    + f"\n\n... [truncated {len(data)} chars, full output: {url}]"
                 )
             return data
         if isinstance(data, dict):
-            return {k: self._truncate_strings(v) for k, v in data.items()}
+            return {k: self._truncate_strings(v, url) for k, v in data.items()}
         if isinstance(data, list):
-            return [self._truncate_strings(item) for item in data]
+            return [self._truncate_strings(item, url) for item in data]
         return data
 
     def _truncate_lists(self, data: Any, url: str) -> Any:

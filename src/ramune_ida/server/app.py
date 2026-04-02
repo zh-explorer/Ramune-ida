@@ -93,11 +93,13 @@ The IDA worker is started lazily: if it has exited or crashed, the next tool cal
 automatically restarts it and reopens the database. You do NOT need to call
 open_database again after a restart or between analysis commands.
 
-Concurrency: you can call multiple tools concurrently. Each project
-has an execution queue that guarantees ordering, so concurrent calls are always safe.
+Concurrency: you can call multiple tools concurrently. Each project executes
+requests sequentially through a queue — concurrent calls are queued automatically,
+so you do not need to wait for one to finish before sending the next.
 Multiple projects run isolated IDA processes and never interfere with each other.
 
-Long-running operations return a task_id when they time out. Poll with get_task_result.
+If a request takes too long, it continues in the background and returns a task_id.
+Poll with get_task_result.
 If a tool cannot handle your request, use execute_python to run arbitrary IDAPython.
 """
 

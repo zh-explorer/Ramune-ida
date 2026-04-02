@@ -3,9 +3,12 @@
 Every MCP tool decorated with ``@register_tool`` (from ``server.app``)
 has its return value automatically passed through
 :meth:`OutputStore.process` **only when the result contains a
-project_id**.  Oversized strings are truncated and the full text is
-written to the project's ``outputs/`` directory for later retrieval
-via ``GET /files/{project_id}/outputs/{output_id}.txt``.
+project_id**.  When the serialised result exceeds *max_length* the full
+JSON is written to disk and the return value is progressively truncated:
+
+1. Large strings   → preview + "truncated" note
+2. Long lists (>30) → first 30 items + ``_truncated`` key
+3. Fallback        → scalars only + download URL
 """
 
 from __future__ import annotations
@@ -14,7 +17,21 @@ import itertools
 import os
 from typing import Any
 
+import orjson
+
 _counter = itertools.count(1)
+
+_LIST_CAP = 30
+_LIST_MIN = 5
+
+
+def _make_url(project_id: str, output_id: str, ext: str) -> str:
+    """Build a download URL, absolute if request_base_url is available."""
+    from ramune_ida.server.app import request_base_url
+
+    base = request_base_url.get("")
+    relative = f"/files/{project_id}/outputs/{output_id}{ext}"
+    return f"{base}{relative}" if base else relative
 
 
 class OutputStore:
@@ -38,22 +55,25 @@ class OutputStore:
     # -- public API ----------------------------------------------------------
 
     def process(self, data: Any, project_id: str, output_dir: str) -> Any:
-        """Recursively walk *data* and truncate any oversized strings.
+        """Truncate *data* if its serialised size exceeds *max_length*.
 
-        *project_id* is used for index bookkeeping and URL generation.
-        *output_dir* is the directory where full-text files are written.
+        Three phases run in order; each phase re-checks the total size
+        and returns immediately when within budget.
         """
-        if isinstance(data, str):
-            truncated, _ = self.truncate_if_needed(data, project_id, output_dir)
-            return truncated
-        if isinstance(data, dict):
-            return {
-                k: self.process(v, project_id, output_dir)
-                for k, v in data.items()
-            }
-        if isinstance(data, list):
-            return [self.process(item, project_id, output_dir) for item in data]
-        return data
+        if self._measure(data) <= self._max_length:
+            return data
+
+        url = self._save_full_json(data, project_id, output_dir)
+
+        data = self._truncate_strings(data)
+        if self._measure(data) <= self._max_length:
+            return data
+
+        data = self._truncate_lists(data, url)
+        if self._measure(data) <= self._max_length:
+            return data
+
+        return self._fallback(data, url)
 
     def truncate_if_needed(
         self,
@@ -61,7 +81,11 @@ class OutputStore:
         project_id: str,
         output_dir: str,
     ) -> tuple[str, str | None]:
-        """Return *(possibly truncated content, full_output_url or None)*."""
+        """Return *(possibly truncated content, full_output_url or None)*.
+
+        Kept for backward compatibility; saves oversized strings to disk
+        individually.
+        """
         if len(content) <= self._max_length:
             return content, None
 
@@ -75,12 +99,82 @@ class OutputStore:
         bucket[output_id] = path
         self._evict(bucket)
 
-        url = f"/files/{project_id}/outputs/{output_id}.txt"
+        url = _make_url(project_id, output_id, ".txt")
         truncated = (
             content[: self._preview_length]
             + f"\n\n... [truncated {len(content)} chars, full output: {url}]"
         )
         return truncated, url
+
+    # -- internals -----------------------------------------------------------
+
+    @staticmethod
+    def _measure(data: Any) -> int:
+        return len(orjson.dumps(data))
+
+    def _save_full_json(
+        self, data: Any, project_id: str, output_dir: str
+    ) -> str:
+        """Write the complete result as JSON and return its download URL."""
+        output_id = f"out-{next(_counter):06d}"
+        os.makedirs(output_dir, exist_ok=True)
+        path = os.path.join(output_dir, f"{output_id}.json")
+        with open(path, "wb") as f:
+            f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
+
+        bucket = self._index.setdefault(project_id, {})
+        bucket[output_id] = path
+        self._evict(bucket)
+
+        return _make_url(project_id, output_id, ".json")
+
+    def _truncate_strings(self, data: Any) -> Any:
+        """Phase 1: recursively shorten strings longer than preview_length."""
+        if isinstance(data, str):
+            if len(data) > self._preview_length:
+                return (
+                    data[: self._preview_length]
+                    + f"\n\n... [truncated {len(data)} chars, see full output]"
+                )
+            return data
+        if isinstance(data, dict):
+            return {k: self._truncate_strings(v) for k, v in data.items()}
+        if isinstance(data, list):
+            return [self._truncate_strings(item) for item in data]
+        return data
+
+    def _truncate_lists(self, data: Any, url: str) -> Any:
+        """Phase 2: cap lists longer than _LIST_CAP items."""
+        if isinstance(data, dict):
+            result: dict[str, Any] = {}
+            for k, v in data.items():
+                if isinstance(v, list) and len(v) > _LIST_CAP:
+                    keep = max(_LIST_MIN, _LIST_CAP)
+                    result[k] = v[:keep]
+                    result["_truncated"] = (
+                        f"Showing {keep} of {len(v)} items. "
+                        f"Full JSON: {url}"
+                    )
+                else:
+                    result[k] = self._truncate_lists(v, url)
+            return result
+        if isinstance(data, list):
+            if len(data) > _LIST_CAP:
+                return data[: max(_LIST_MIN, _LIST_CAP)]
+            return [self._truncate_lists(item, url) for item in data]
+        return data
+
+    @staticmethod
+    def _fallback(data: Any, url: str) -> dict[str, Any]:
+        """Phase 3: keep only scalar fields + download URL."""
+        result: dict[str, Any] = {"_truncated": f"Output too large. Full JSON: {url}"}
+        if isinstance(data, dict):
+            for k, v in data.items():
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    result[k] = v
+        return result
+
+    # -- housekeeping --------------------------------------------------------
 
     def _evict(self, bucket: dict[str, str]) -> None:
         """Remove oldest entries until the bucket is within the limit."""

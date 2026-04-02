@@ -180,7 +180,7 @@ All data is stored under a single data directory (default `~/.ramune-ida`, confi
 | `--hard-limit` | `8` | Maximum concurrent workers (0 = unlimited) |
 | `--data-dir` | `~/.ramune-ida` | Data directory for projects and plugins (`RAMUNE_DATA_DIR`) |
 | `--auto-save-interval` | `300` | Seconds between auto-saves (0 = disabled) |
-| `--output-max-length` | `50000` | Truncate tool output beyond this many chars |
+| `--output-max-length` | `20000` | Truncate tool output beyond this many chars |
 
 ## License
 

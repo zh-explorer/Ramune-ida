@@ -73,8 +73,8 @@ def main() -> None:
         help="Seconds between auto-saves; 0 = disabled (default: 300)",
     )
     parser.add_argument(
-        "--output-max-length", type=int, default=50_000,
-        help="Truncate tool output beyond this many chars (default: 50000)",
+        "--output-max-length", type=int, default=20_000,
+        help="Truncate tool output beyond this many chars (default: 20000)",
     )
 
     args = parser.parse_args()

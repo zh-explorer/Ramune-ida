@@ -180,7 +180,7 @@ Claude Desktop 或 Cursor 中添加：
 | `--hard-limit` | `8` | 并发 Worker 硬上限（0 = 不限） |
 | `--data-dir` | `~/.ramune-ida` | 数据目录（项目 + 插件）（`RAMUNE_DATA_DIR`） |
 | `--auto-save-interval` | `300` | 自动保存间隔秒数（0 = 禁用） |
-| `--output-max-length` | `50000` | 工具输出截断字符数 |
+| `--output-max-length` | `20000` | 工具输出截断字符数 |
 
 ## 许可证
 

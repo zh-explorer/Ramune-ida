@@ -323,13 +323,29 @@ class TestOutputStore:
         assert result.startswith("a" * 10)
         assert url is not None
 
-    def test_process_recursive(self, tmp_path):
-        store = OutputStore(max_length=10)
-        data = {"short": "ok", "long": "x" * 50, "num": 42}
+    def test_process_truncates_large_string(self, tmp_path):
+        store = OutputStore(max_length=500, preview_length=20)
+        data = {"short": "ok", "long": "x" * 1000, "num": 42}
         result = store.process(data, "p", str(tmp_path))
         assert result["short"] == "ok"
         assert result["num"] == 42
         assert "truncated" in result["long"]
+        assert result["long"].startswith("x" * 20)
+
+    def test_process_truncates_long_list(self, tmp_path):
+        store = OutputStore(max_length=500)
+        data = {"project_id": "p", "items": [{"i": n} for n in range(200)]}
+        result = store.process(data, "p", str(tmp_path))
+        assert len(result["items"]) <= 30
+        assert "_truncated" in result
+        assert "200" in result["_truncated"]
+
+    def test_process_fallback(self, tmp_path):
+        store = OutputStore(max_length=50, preview_length=10)
+        data = {"project_id": "p", "items": [{"v": "x" * 100}] * 100}
+        result = store.process(data, "p", str(tmp_path))
+        assert result["project_id"] == "p"
+        assert "_truncated" in result
 
 
 # ── ServerConfig ──────────────────────────────────────────────────

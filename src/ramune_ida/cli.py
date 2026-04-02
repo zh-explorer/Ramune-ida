@@ -92,9 +92,22 @@ def main() -> None:
     )
     configure(config)
 
+    from mcp.server.transport_security import TransportSecuritySettings
+
     transport, host, port = parse_transport_url(args.url)
     mcp.settings.host = host
     mcp.settings.port = port
+
+    if host in ("127.0.0.1", "localhost", "::1"):
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
+            allowed_origins=["http://127.0.0.1:*", "http://localhost:*", "http://[::1]:*"],
+        )
+    else:
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False,
+        )
     try:
         mcp.run(transport=transport)
     except KeyboardInterrupt:

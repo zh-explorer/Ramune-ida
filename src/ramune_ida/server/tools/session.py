@@ -72,6 +72,7 @@ async def projects() -> dict:
 async def open_database(
     project_id: str,
     path: Annotated[str, Field(description="Binary or IDB path, relative to work_dir")],
+    survey: Annotated[bool, Field(description="Run survey after opening (default: true)")] = True,
 ) -> dict:
     state = get_state()
     project = state.resolve_project(project_id)
@@ -93,14 +94,15 @@ async def open_database(
     if not task.is_done:
         result["task_id"] = task.task_id
 
-    try:
-        survey_task = await project.execute(
-            PluginInvocation("survey", {}), timeout=30.0
-        )
-        if survey_task.result:
-            result["survey"] = survey_task.result
-    except Exception:
-        pass
+    if survey:
+        try:
+            survey_task = await project.execute(
+                PluginInvocation("survey", {}), timeout=30.0
+            )
+            if survey_task.result:
+                result["survey"] = survey_task.result
+        except Exception:
+            pass
 
     if state.limiter.over_soft_limit:
         result["warning"] = (

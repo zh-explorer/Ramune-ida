@@ -9,8 +9,14 @@ async function request<T>(path: string, params?: Record<string, string>): Promis
   }
   const res = await fetch(url.toString());
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `HTTP ${res.status}`);
+    const body = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+    const msg = body.error || `HTTP ${res.status}`;
+    // Business errors (4xx) — throw with message but don't log to console
+    // Server errors (5xx) — throw normally
+    const err = new Error(msg);
+    (err as any).status = res.status;
+    (err as any).isBusinessError = res.status < 500;
+    throw err;
   }
   return res.json();
 }
@@ -42,6 +48,15 @@ export const xrefs = (pid: string, addr: string) =>
 
 export const survey = (pid: string) =>
   request<Record<string, unknown>>(`${BASE}/projects/${pid}/survey`);
+
+export const funcView = (pid: string, func: string) =>
+  request<import("./types").FuncViewData>(`${BASE}/projects/${pid}/func_view`, { func });
+
+export const linearView = (pid: string, addr: string, count?: number) =>
+  request<import("./types").LinearViewData>(`${BASE}/projects/${pid}/linear_view`, {
+    addr,
+    ...(count ? { count: String(count) } : {}),
+  });
 
 // Listings
 export const listFuncs = (pid: string, filter?: string, exclude?: string) =>

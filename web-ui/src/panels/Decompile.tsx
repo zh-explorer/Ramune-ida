@@ -1,99 +1,101 @@
-import { useEffect, useRef } from "react";
-import { EditorView } from "@codemirror/view";
-import { EditorState } from "@codemirror/state";
-import { cpp } from "@codemirror/lang-cpp";
-import { oneDark } from "@codemirror/theme-one-dark";
-import { highlightSelectionMatches } from "@codemirror/search";
+import { useCallback, useRef, useEffect } from "react";
 import { useViewStore } from "../stores/viewStore";
 import { useProjectStore } from "../stores/projectStore";
 import { findNavTarget } from "../utils/codeNav";
+import { highlightC } from "../utils/highlight";
+import { ChannelBadge } from "../components/ChannelBadge";
 
-export function Decompile() {
-  const { currentFunc, decompileCode, decompileLoading, decompileError } =
-    useViewStore();
-  const editorRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
+export function Decompile({ tabId = "decompile" }: { tabId?: string }) {
+  const store = useViewStore();
+  const ch = store.getTabChannel(tabId);
+  const channel = store.getChannel(ch);
+  const { activeProjectId } = useProjectStore();
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!editorRef.current) return;
+  const { currentFunc, funcName, funcData, loading, error,
+    highlightDecompileLines, highlightToken } = channel;
 
-    const view = new EditorView({
-      state: EditorState.create({
-        doc: "",
-        extensions: [
-          cpp(),
-          oneDark,
-          highlightSelectionMatches(),
-          EditorView.editable.of(false),
-          EditorView.lineWrapping,
-          EditorState.readOnly.of(true),
-          EditorView.domEventHandlers({
-            click(event, view) {
-              if (!event.ctrlKey && !event.metaKey) return false;
-              const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-              if (pos === null) return false;
-              const line = view.state.doc.lineAt(pos);
-              const col = pos - line.from;
-              const target = findNavTarget(line.text, col);
-              if (target) {
-                event.preventDefault();
-                const pid = useProjectStore.getState().activeProjectId;
-                if (pid) {
-                  useViewStore.getState().navigateTo(pid, target);
-                }
-                return true;
-              }
-              return false;
-            },
-          }),
-        ],
-      }),
-      parent: editorRef.current,
-    });
-    viewRef.current = view;
-
-    return () => {
-      view.destroy();
-      viewRef.current = null;
-    };
-  }, []);
+  // Set this channel as active when interacted with
+  const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
 
   useEffect(() => {
-    if (!viewRef.current) return;
-    const doc = decompileCode || "";
-    viewRef.current.dispatch({
-      changes: {
-        from: 0,
-        to: viewRef.current.state.doc.length,
-        insert: doc,
-      },
-    });
-  }, [decompileCode]);
+    if (highlightDecompileLines.length === 0 || !containerRef.current) return;
+    const firstLine = highlightDecompileLines[0];
+    const el = containerRef.current.querySelector(`[data-line="${firstLine}"]`);
+    el?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [highlightDecompileLines]);
+
+  const handleClick = useCallback(
+    (lineIdx: number, e: React.MouseEvent) => {
+      activate();
+
+      if (e.ctrlKey || e.metaKey) {
+        const line = funcData?.decompile[lineIdx];
+        if (line && activeProjectId) {
+          const target = findNavTarget(line.text, 0);
+          if (target) {
+            store.navigateTo(ch, activeProjectId, target);
+            return;
+          }
+        }
+      }
+
+      if (e.detail === 2) {
+        // Double-click on token → navigate
+        const target = (e.target as HTMLElement).getAttribute?.("data-token");
+        if (target && activeProjectId) {
+          store.navigateTo(ch, activeProjectId, target);
+          return;
+        }
+      }
+
+      const target = (e.target as HTMLElement).getAttribute?.("data-token");
+      if (target) {
+        store.setHighlightToken(ch, target === highlightToken ? null : target);
+        return;
+      }
+
+      store.highlightFromDecompile(ch, lineIdx);
+    },
+    [store, ch, funcData, activeProjectId, highlightToken, activate],
+  );
+
+  const title = funcName || currentFunc || "";
 
   return (
-    <div className="panel decompile-panel">
+    <div className="panel decompile-panel" onMouseDown={activate}>
       <div className="panel-header">
-        <span>Decompile{currentFunc ? `: ${currentFunc}` : ""}</span>
+        <ChannelBadge tabId={tabId} />
+        <span>Decompile{title ? `: ${title}` : ""}</span>
       </div>
-      <div className="panel-body code-panel-body">
-        {decompileLoading && (
-          <div className="code-overlay">Loading...</div>
-        )}
-        {decompileError && (
-          <div className="code-overlay error-msg">{decompileError}</div>
-        )}
-        {!currentFunc && !decompileLoading && (
+      <div className="panel-body code-panel-body" ref={containerRef}>
+        {loading && <div className="code-overlay">Loading...</div>}
+        {error && <div className="code-overlay error-msg">{error}</div>}
+        {!currentFunc && !loading && (
           <div className="empty-hint">
             Select a function from the list
             <br />
-            <span className="empty-hint-sub">Ctrl+Click identifiers to navigate</span>
+            <span className="empty-hint-sub">Click token to highlight, double-click to navigate</span>
           </div>
         )}
-        <div
-          ref={editorRef}
-          className="code-editor"
-          style={{ display: currentFunc ? "block" : "none" }}
-        />
+        {funcData && (
+          <div className="code-lines">
+            {funcData.decompile.map((line) => {
+              const lineHl = highlightDecompileLines.includes(line.line);
+              return (
+                <div
+                  key={line.line}
+                  data-line={line.line}
+                  className={`code-line ${lineHl ? "code-line-hl" : ""}`}
+                  onClick={(e) => handleClick(line.line, e)}
+                >
+                  <span className="code-lineno">{line.line + 1}</span>
+                  <span className="code-text">{highlightC(line.text, highlightToken)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );

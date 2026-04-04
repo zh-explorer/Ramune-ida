@@ -42,7 +42,7 @@ export function ActivityStream() {
       if (pid !== useProjectStore.getState().activeProjectId) {
         useProjectStore.getState().setActiveProject(pid);
       }
-      useViewStore.getState().navigateTo(pid, target);
+      useViewStore.getState().navigateActive(pid, target);
     }
   }, []);
 

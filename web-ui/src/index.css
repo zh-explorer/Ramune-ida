@@ -389,23 +389,196 @@ body {
   white-space: nowrap;
 }
 
-/* Code editor panels */
+/* Code panels */
 .code-panel-body {
   padding: 0;
   position: relative;
+  overflow-y: auto;
 }
 
-.code-editor {
-  height: 100%;
+.code-lines {
+  font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
-.code-editor .cm-editor {
-  height: 100%;
+.code-line {
+  display: flex;
+  padding: 0 8px;
+  cursor: pointer;
+  white-space: pre;
 }
 
-.code-editor .cm-selectionMatch {
-  background-color: rgba(255, 213, 79, 0.35) !important;
-  border-bottom: 1px solid #ffd54f;
+.code-line:hover {
+  background: var(--bg-hover);
+}
+
+.code-line-hl {
+  background: rgba(255, 213, 79, 0.12) !important;
+  border-left: 2px solid var(--yellow);
+}
+
+.code-lineno {
+  color: var(--text-muted);
+  min-width: 36px;
+  text-align: right;
+  padding-right: 12px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.code-text {
+  color: var(--text-primary);
+}
+
+/* Disassembly columns */
+.disasm-addr {
+  color: var(--accent);
+  min-width: 80px;
+  flex-shrink: 0;
+  margin-right: 8px;
+}
+
+.disasm-mnem {
+  color: var(--green);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.disasm-ops {
+  color: var(--text-primary);
+}
+
+/* Syntax highlighting */
+.hl-kw { color: var(--accent); }
+.hl-str { color: var(--yellow); }
+.hl-num { color: var(--orange); }
+.hl-comment { color: var(--text-muted); font-style: italic; }
+.hl-func { color: var(--green); }
+.hl-punct { color: var(--text-secondary); }
+.asm-reg { color: var(--red); }
+.hl-ident { color: var(--text-primary); }
+
+/* Token highlight — click an identifier to highlight all occurrences */
+.token-hl {
+  background: rgba(255, 213, 79, 0.3);
+  border-radius: 2px;
+  outline: 1px solid rgba(255, 213, 79, 0.5);
+}
+
+[data-token] {
+  cursor: pointer;
+}
+
+/* Channel sync indicator */
+.channel-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.channel-indicator {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.channel-indicator.linked {
+  opacity: 0.9;
+}
+
+.channel-indicator:hover {
+  opacity: 1;
+}
+
+.channel-icon {
+  font-size: 11px;
+}
+
+.channel-strip {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 2px;
+}
+
+.channel-menu-empty {
+  padding: 5px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.channel-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 0;
+  z-index: 1000;
+  min-width: 180px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.channel-menu-title {
+  padding: 4px 12px;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.channel-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.channel-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.channel-menu-item.active {
+  color: var(--accent);
+}
+
+.channel-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.channel-check {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.channel-menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 8px;
 }
 
 .code-overlay {
@@ -576,6 +749,100 @@ body {
   color: var(--text-muted);
   font-size: 11px;
   flex-shrink: 0;
+}
+
+/* Linear View (IDA View) */
+.linear-body {
+  overflow-y: auto;
+}
+
+.linear-separator {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+.linear-func-header {
+  background: var(--bg-hover);
+  font-weight: 500;
+}
+
+.linear-func-name {
+  color: var(--green);
+  cursor: pointer;
+}
+
+.linear-func-end {
+  opacity: 0.5;
+}
+
+.linear-xref .hl-comment {
+  font-size: 11px;
+}
+
+.linear-seg {
+  color: var(--text-muted);
+  min-width: 50px;
+  max-width: 50px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+  font-size: 11px;
+  margin-right: 4px;
+}
+
+.linear-addr {
+  color: var(--accent);
+  min-width: 90px;
+  flex-shrink: 0;
+  margin-right: 8px;
+  font-size: 11px;
+}
+
+.linear-name {
+  color: var(--orange);
+  margin-right: 4px;
+  cursor: pointer;
+}
+
+.linear-data {
+  color: var(--text-secondary);
+}
+
+.linear-text-muted {
+  color: var(--text-muted);
+}
+
+.linear-align {
+  opacity: 0.4;
+}
+
+.linear-unknown {
+  opacity: 0.3;
+}
+
+.linear-collapsed {
+  background: rgba(137, 180, 250, 0.06);
+  border-left: 2px solid var(--accent);
+  padding-left: 6px !important;
+}
+
+.collapsed-badge {
+  display: inline-block;
+  background: var(--bg-active);
+  color: var(--accent);
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 3px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.linear-loading {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 8px;
+  font-style: italic;
 }
 
 /* HexView */

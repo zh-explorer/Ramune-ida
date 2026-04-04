@@ -13,3 +13,4 @@ from __future__ import annotations
 TAG_KIND_READ: str = "kind:read"
 TAG_KIND_WRITE: str = "kind:write"
 TAG_KIND_UNSAFE: str = "kind:unsafe"
+TAG_MCP_FALSE: str = "mcp:false"

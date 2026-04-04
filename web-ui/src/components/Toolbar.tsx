@@ -4,10 +4,9 @@ import { MenuBar } from "./MenuBar";
 interface ToolbarProps {
   onAddPanel: (type: string) => void;
   onResetLayout: () => void;
-  panelTypes: Record<string, string>;
 }
 
-export function Toolbar({ onAddPanel, onResetLayout, panelTypes }: ToolbarProps) {
+export function Toolbar({ onAddPanel, onResetLayout }: ToolbarProps) {
   const { projects, activeProjectId, setActiveProject } = useProjectStore();
 
   return (
@@ -16,7 +15,6 @@ export function Toolbar({ onAddPanel, onResetLayout, panelTypes }: ToolbarProps)
       <MenuBar
         onAddPanel={onAddPanel}
         onResetLayout={onResetLayout}
-        panelTypes={panelTypes}
       />
       <div className="toolbar-spacer" />
       <select

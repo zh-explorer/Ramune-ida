@@ -32,6 +32,47 @@ export interface ProjectFile {
   modified: number;
 }
 
+// func_view structured data
+export interface FuncViewData {
+  func: { addr: string; end: string; name: string };
+  decompile: DecompileLine[];
+  disasm: DisasmLine[];
+}
+
+export interface DecompileLine {
+  line: number;
+  text: string;
+  addrs: string[];
+}
+
+export interface DisasmLine {
+  addr: string;
+  size: number;
+  mnemonic: string;
+  operands: string;
+  decompile_lines: number[];
+}
+
+// linear_view data
+export interface LinearLine {
+  addr: string;
+  type: "code" | "data" | "string" | "align" | "func_header" | "func_end" | "separator" | "xref_comment" | "unknown";
+  text?: string;
+  mnemonic?: string;
+  operands?: string;
+  name?: string;
+  func_name?: string;
+  size?: number;
+  segment?: string;
+}
+
+export interface LinearViewData {
+  start: string;
+  next: string | null;
+  count: number;
+  lines: LinearLine[];
+}
+
 export interface ActivityEvent {
   id: string;
   timestamp: number;

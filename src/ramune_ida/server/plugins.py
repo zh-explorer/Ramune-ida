@@ -33,6 +33,7 @@ from pydantic import Field
 from ramune_ida.commands import PluginInvocation
 from ramune_ida.server.app import get_state, register_tool
 from ramune_ida.worker.plugins import ENV_PLUGIN_DIR
+from ramune_ida.worker.tags import TAG_MCP_FALSE
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ def register_plugin_tools(tools_metadata: list[dict[str, Any]]) -> int:
     count = 0
     for meta in tools_metadata:
         tags = meta.get("tags", [])
-        if "mcp:false" in tags:
+        if TAG_MCP_FALSE in tags:
             log.info("Skipping MCP registration for %s (mcp:false)", meta.get("name", "?"))
             continue
         try:

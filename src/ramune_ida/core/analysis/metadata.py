@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ramune_ida.worker.tags import TAG_KIND_READ
+from ramune_ida.worker.tags import TAG_KIND_READ, TAG_MCP_FALSE
 
 TOOLS: list[dict] = [
     {
@@ -30,8 +30,7 @@ TOOLS: list[dict] = [
             "count": {
                 "type": "integer",
                 "required": False,
-                "default": 20,
-                "description": "Number of instructions",
+                "description": "Number of instructions. Omit to disassemble the entire function if addr belongs to one.",
             },
         },
     },
@@ -52,5 +51,34 @@ TOOLS: list[dict] = [
         "description": "Binary overview: file identity, segments, entry/exports, function stats, import modules.",
         "tags": ["analysis", TAG_KIND_READ],
         "params": {},
+    },
+    {
+        "name": "linear_view",
+        "description": "Linear disassembly view: returns formatted lines for an address range.",
+        "tags": ["analysis", TAG_KIND_READ, TAG_MCP_FALSE],
+        "params": {
+            "addr": {
+                "type": "string",
+                "required": True,
+                "description": "Start address or name",
+            },
+            "count": {
+                "type": "integer",
+                "required": False,
+                "description": "Number of lines to return (default 100)",
+            },
+        },
+    },
+    {
+        "name": "func_view",
+        "description": "Structured function view: decompile + disassembly + line mapping.",
+        "tags": ["analysis", TAG_KIND_READ, TAG_MCP_FALSE],
+        "params": {
+            "func": {
+                "type": "string",
+                "required": True,
+                "description": "Name or hex address",
+            },
+        },
     },
 ]

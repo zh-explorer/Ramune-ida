@@ -12,6 +12,7 @@ import { StringList } from "./panels/StringList";
 import { Decompile } from "./panels/Decompile";
 import { Disassembly } from "./panels/Disassembly";
 import { HexView } from "./panels/HexView";
+import { LinearView } from "./panels/LinearView";
 import { useProjectStore } from "./stores/projectStore";
 import { useViewStore } from "./stores/viewStore";
 import {
@@ -19,23 +20,22 @@ import {
   disconnectActivityStream,
 } from "./stores/activityStore";
 import { applyTheme, getStoredThemeId } from "./theme/themes";
+import { TabTitle } from "./components/TabTitle";
 import "./App.css";
 
 // ── Panel type registry ─────────────────────────────────────────
 
-const PANEL_TYPES: Record<string, { title: string; render: () => React.ReactElement }> = {
+const PANEL_TYPES: Record<string, { title: string; render: (tabId: string) => React.ReactElement }> = {
   functions:   { title: "Functions",    render: () => <FunctionList /> },
   strings:     { title: "Strings",      render: () => <StringList /> },
   hex:         { title: "Hex",          render: () => <HexView /> },
   project:     { title: "Project",      render: () => <ProjectOverview /> },
-  decompile:   { title: "Decompile",    render: () => <Decompile /> },
-  disassembly: { title: "Disassembly",  render: () => <Disassembly /> },
+  decompile:   { title: "Decompile",    render: (id) => <Decompile tabId={id} /> },
+  disassembly: { title: "Disassembly",  render: (id) => <Disassembly tabId={id} /> },
+  idaview:     { title: "IDA View",     render: (id) => <LinearView tabId={id} /> },
   activity:    { title: "Activity",     render: () => <ActivityStream /> },
 };
 
-const PANEL_TITLES: Record<string, string> = Object.fromEntries(
-  Object.entries(PANEL_TYPES).map(([k, v]) => [k, v.title]),
-);
 
 function parseTabType(id: string): string {
   const colon = id.indexOf(":");
@@ -50,15 +50,24 @@ function makeTab(id: string): TabData {
   if (!reg) return { id, title: id, content: <div>Unknown: {id}</div>, group: "card" };
   return {
     id,
-    title: reg.title,
-    content: <div style={{ height: "100%", overflow: "auto" }}>{reg.render()}</div>,
+    title: <TabTitle tabId={id} />,
+    content: <div style={{ height: "100%", overflow: "auto" }}>{reg.render(id)}</div>,
     closable: true,
     group: "card",
   };
 }
 
 function createNewTab(type: string): TabData {
-  return makeTab(`${type}:${++tabCounter}`);
+  const id = `${type}:${++tabCounter}`;
+  const tab = makeTab(id);
+  // Assign independent channel for syncable panels
+  if (["decompile", "disassembly", "idaview"].includes(type)) {
+    const store = useViewStore.getState();
+    const used = new Set(Object.values(store.tabChannels));
+    const free = ["B", "C", "D", "E"].find((ch) => !used.has(ch)) || "E";
+    store.setTabChannel(id, free);
+  }
+  return tab;
 }
 
 function loadTab(data: TabData): TabData {
@@ -68,8 +77,8 @@ function loadTab(data: TabData): TabData {
   if (!reg) return { ...data, content: <div>Unknown: {id}</div> };
   return {
     ...data,
-    title: reg.title,
-    content: <div style={{ height: "100%", overflow: "auto" }}>{reg.render()}</div>,
+    title: <TabTitle tabId={id} />,
+    content: <div style={{ height: "100%", overflow: "auto" }}>{reg.render(id)}</div>,
     closable: true,
     group: "card",
   };
@@ -88,6 +97,12 @@ const groups: Record<string, TabGroup> = {
 const LS_KEY = "ramune-web:dock-layout-v3";
 
 function createDefaultLayout(): LayoutData {
+  // Pre-assign channels: decompile + idaview linked (A), disassembly independent (B)
+  const store = useViewStore.getState();
+  store.setTabChannel("decompile", "A");
+  store.setTabChannel("idaview", "A");
+  store.setTabChannel("disassembly", "B");
+
   return {
     dockbox: {
       mode: "horizontal",
@@ -98,7 +113,7 @@ function createDefaultLayout(): LayoutData {
           activeId: "project",
         },
         { size: 500, tabs: [makeTab("decompile")] },
-        { size: 500, tabs: [makeTab("disassembly")] },
+        { size: 500, tabs: [makeTab("idaview"), makeTab("disassembly")] },
         { size: 300, tabs: [makeTab("activity")] },
       ],
     },
@@ -120,7 +135,7 @@ function loadSavedLayout(): LayoutData | null {
 
 function App() {
   const { fetchProjects, fetchSystem, activeProjectId } = useProjectStore();
-  const clearView = useViewStore((s) => s.clear);
+  const clearView = useViewStore((s) => s.clearAll);
   const dockRef = useRef<DockLayout>(null);
 
   // Apply saved theme on mount
@@ -155,11 +170,33 @@ function App() {
     };
   }, [fetchProjects, fetchSystem]);
 
-  const onLayoutChange = useCallback(() => {
+  const onLayoutChange = useCallback((newLayout: LayoutData) => {
     try {
       const layout = dockRef.current?.saveLayout();
       if (layout) localStorage.setItem(LS_KEY, JSON.stringify(layout));
     } catch {}
+
+    // Clean up tabChannels for tabs that no longer exist in the layout
+    const store = useViewStore.getState();
+    const existingIds = new Set<string>();
+    function collectIds(box: any) {
+      if (box?.tabs) {
+        for (const tab of box.tabs) {
+          if (tab.id) existingIds.add(tab.id);
+        }
+      }
+      if (box?.children) {
+        for (const child of box.children) collectIds(child);
+      }
+    }
+    collectIds(newLayout.dockbox);
+    collectIds(newLayout.floatbox);
+
+    for (const tabId of Object.keys(store.tabChannels)) {
+      if (!existingIds.has(tabId)) {
+        store.removeTab(tabId);
+      }
+    }
   }, []);
 
   const handleAddPanel = useCallback((type: string) => {
@@ -177,7 +214,6 @@ function App() {
       <Toolbar
         onAddPanel={handleAddPanel}
         onResetLayout={handleResetLayout}
-        panelTypes={PANEL_TITLES}
       />
       <div className="app-main">
         <DockLayout

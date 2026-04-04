@@ -4,6 +4,7 @@ import { listFuncs } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
 
+// FunctionList navigates on the active channel
 interface FuncEntry {
   addr: string;
   name: string;
@@ -12,7 +13,8 @@ interface FuncEntry {
 
 export function FunctionList() {
   const { activeProjectId } = useProjectStore();
-  const { navigateTo, currentFunc } = useViewStore();
+  const { navigateActive, activeChannel, getChannel } = useViewStore();
+  const currentFunc = getChannel(activeChannel).currentFunc;
   const [functions, setFunctions] = useState<FuncEntry[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,10 +55,10 @@ export function FunctionList() {
   const handleClick = useCallback(
     (func: FuncEntry) => {
       if (activeProjectId) {
-        navigateTo(activeProjectId, func.addr);
+        navigateActive(activeProjectId, func.addr);
       }
     },
-    [activeProjectId, navigateTo],
+    [activeProjectId, navigateActive],
   );
 
   return (

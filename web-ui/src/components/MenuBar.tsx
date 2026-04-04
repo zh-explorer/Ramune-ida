@@ -106,10 +106,9 @@ function TopMenuItem({
 interface MenuBarProps {
   onAddPanel: (type: string) => void;
   onResetLayout: () => void;
-  panelTypes: Record<string, string>; // type → title
 }
 
-export function MenuBar({ onAddPanel, onResetLayout, panelTypes }: MenuBarProps) {
+export function MenuBar({ onAddPanel, onResetLayout }: MenuBarProps) {
   const [currentTheme, setCurrentTheme] = useState(getStoredThemeId);
 
   const handleTheme = useCallback((id: string) => {
@@ -123,10 +122,34 @@ export function MenuBar({ onAddPanel, onResetLayout, panelTypes }: MenuBarProps)
   }, []); // eslint-disable-line
 
   const viewItems: MenuItem[] = [
-    ...Object.entries(panelTypes).map(([type, title]) => ({
-      label: `Add ${title}`,
-      onClick: () => onAddPanel(type),
-    })),
+    {
+      label: "Disassembly",
+      submenu: [
+        { label: "IDA View", onClick: () => onAddPanel("idaview") },
+        { label: "Disassembly", onClick: () => onAddPanel("disassembly") },
+        { label: "Hex View", onClick: () => onAddPanel("hex") },
+      ],
+    },
+    {
+      label: "Decompiler",
+      submenu: [
+        { label: "Decompile", onClick: () => onAddPanel("decompile") },
+      ],
+    },
+    {
+      label: "Navigation",
+      submenu: [
+        { label: "Functions", onClick: () => onAddPanel("functions") },
+        { label: "Strings", onClick: () => onAddPanel("strings") },
+      ],
+    },
+    {
+      label: "General",
+      submenu: [
+        { label: "Project", onClick: () => onAddPanel("project") },
+        { label: "Activity", onClick: () => onAddPanel("activity") },
+      ],
+    },
     { separator: true, label: "" },
     { label: "Reset Layout", onClick: onResetLayout },
   ];

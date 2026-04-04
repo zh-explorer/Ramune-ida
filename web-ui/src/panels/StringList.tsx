@@ -12,7 +12,7 @@ interface StringEntry {
 
 export function StringList() {
   const { activeProjectId } = useProjectStore();
-  const { navigateTo } = useViewStore();
+  const { navigateActive } = useViewStore();
   const [strings, setStrings] = useState<StringEntry[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -53,10 +53,10 @@ export function StringList() {
   const handleClick = useCallback(
     (entry: StringEntry) => {
       if (activeProjectId) {
-        navigateTo(activeProjectId, entry.addr);
+        navigateActive(activeProjectId, entry.addr);
       }
     },
-    [activeProjectId, navigateTo],
+    [activeProjectId, navigateActive],
   );
 
   return (

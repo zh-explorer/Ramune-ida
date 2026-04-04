@@ -1,117 +1,265 @@
 import { create } from "zustand";
-import { decompile, disasm } from "../api/client";
+import { funcView } from "../api/client";
+import type { FuncViewData } from "../api/types";
 
-interface ViewState {
-  // Current navigation target
+// ── Channel state ───────────────────────────────────────────────
+
+export interface ChannelState {
   currentFunc: string | null;
-  currentAddr: string | null;
-
-  // Decompile result
-  decompileCode: string | null;
-  decompileLoading: boolean;
-  decompileError: string | null;
-
-  // Disasm result
-  disasmText: string | null;
-  disasmLoading: boolean;
-  disasmError: string | null;
-
-  // Navigation history
+  funcName: string | null;
+  funcData: FuncViewData | null;
+  loading: boolean;
+  error: string | null;
+  highlightDecompileLines: number[];
+  highlightDisasmAddrs: string[];
+  highlightToken: string | null;
   history: string[];
   historyIndex: number;
-
-  // Cache
-  _decompileCache: Map<string, string>;
-
-  navigateTo: (projectId: string, func: string) => void;
-  goBack: () => void;
-  clear: () => void;
+  _cache: Map<string, FuncViewData>;
 }
 
-export const useViewStore = create<ViewState>((set, get) => ({
-  currentFunc: null,
-  currentAddr: null,
-  decompileCode: null,
-  decompileLoading: false,
-  decompileError: null,
-  disasmText: null,
-  disasmLoading: false,
-  disasmError: null,
-  history: [],
-  historyIndex: -1,
-  _decompileCache: new Map(),
+function emptyChannel(): ChannelState {
+  return {
+    currentFunc: null,
+    funcName: null,
+    funcData: null,
+    loading: false,
+    error: null,
+    highlightDecompileLines: [],
+    highlightDisasmAddrs: [],
+    highlightToken: null,
+    history: [],
+    historyIndex: -1,
+    _cache: new Map(),
+  };
+}
 
-  navigateTo: (projectId: string, func: string) => {
+// ── Store ───────────────────────────────────────────────────────
+
+interface ViewStore {
+  // Multi-channel state
+  channels: Record<string, ChannelState>;
+  activeChannel: string;
+
+  // Tab → channel mapping
+  tabChannels: Record<string, string>; // tabId → channelId
+  // Tab → channel mapping
+  // Actions
+  getChannel: (ch: string) => ChannelState;
+  setActiveChannel: (ch: string) => void;
+  setTabChannel: (tabId: string, ch: string) => void;
+  getTabChannel: (tabId: string) => string;
+  removeTab: (tabId: string) => void;
+
+  navigateTo: (ch: string, projectId: string, func: string) => void;
+  navigateActive: (projectId: string, func: string) => void;
+  highlightFromDecompile: (ch: string, lineIdx: number) => void;
+  highlightFromDisasm: (ch: string, addr: string) => void;
+  setHighlightToken: (ch: string, token: string | null) => void;
+  clearHighlight: (ch: string) => void;
+  clear: (ch: string) => void;
+  clearAll: () => void;
+}
+
+export const useViewStore = create<ViewStore>((set, get) => ({
+  channels: { A: emptyChannel() },
+  activeChannel: "A",
+  tabChannels: {},
+
+  getChannel: (ch: string) => {
+    return get().channels[ch] || emptyChannel();
+  },
+
+  setActiveChannel: (ch: string) => {
+    set({ activeChannel: ch });
+  },
+
+  setTabChannel: (tabId: string, ch: string) => {
+    set((s) => ({
+      tabChannels: { ...s.tabChannels, [tabId]: ch },
+    }));
+    // Ensure channel exists
+    if (!get().channels[ch]) {
+      set((s) => ({
+        channels: { ...s.channels, [ch]: emptyChannel() },
+      }));
+    }
+  },
+
+  getTabChannel: (tabId: string) => {
+    return get().tabChannels[tabId] || "A";
+  },
+
+  removeTab: (tabId: string) => {
+    set((s) => {
+      const { [tabId]: _, ...rest } = s.tabChannels;
+      return { tabChannels: rest };
+    });
+  },
+
+  navigateTo: (ch: string, projectId: string, func: string) => {
     const state = get();
+    const channel = state.channels[ch] || emptyChannel();
 
-    // Update history
-    const newHistory = state.history.slice(0, state.historyIndex + 1);
+    const newHistory = channel.history.slice(0, channel.historyIndex + 1);
     newHistory.push(func);
 
-    set({
+    const updated: ChannelState = {
+      ...channel,
       currentFunc: func,
-      currentAddr: func,
+      funcName: null,
+      funcData: null,
+      loading: true,
+      error: null,
+      highlightDecompileLines: [],
+      highlightDisasmAddrs: [],
       history: newHistory,
       historyIndex: newHistory.length - 1,
-      decompileLoading: true,
-      decompileError: null,
-      disasmLoading: true,
-      disasmError: null,
-    });
+    };
 
-    // Check cache
+    set((s) => ({
+      channels: { ...s.channels, [ch]: updated },
+      activeChannel: ch,
+    }));
+
     const cacheKey = `${projectId}:${func}`;
-    const cached = state._decompileCache.get(cacheKey);
+    const cached = channel._cache.get(cacheKey);
     if (cached) {
-      set({ decompileCode: cached, decompileLoading: false });
-    } else {
-      decompile(projectId, func)
-        .then((res) => {
-          const code = (res as Record<string, unknown>).code as string || JSON.stringify(res, null, 2);
-          // Update cache (keep max 50 entries)
-          const cache = get()._decompileCache;
-          if (cache.size > 50) {
-            const first = cache.keys().next().value;
-            if (first) cache.delete(first);
-          }
-          cache.set(cacheKey, code);
-          set({ decompileCode: code, decompileLoading: false });
-        })
-        .catch((e) => {
-          set({ decompileCode: null, decompileLoading: false, decompileError: String(e) });
-        });
+      set((s) => ({
+        channels: {
+          ...s.channels,
+          [ch]: { ...s.channels[ch], funcData: cached, funcName: cached.func.name, loading: false },
+        },
+      }));
+      return;
     }
 
-    // Fetch disasm
-    disasm(projectId, func, "500")
-      .then((res) => {
-        const text = (res as Record<string, unknown>).disasm as string || JSON.stringify(res, null, 2);
-        set({ disasmText: text, disasmLoading: false });
+    funcView(projectId, func)
+      .then((data) => {
+        const cache = get().channels[ch]?._cache || new Map();
+        if (cache.size > 30) {
+          const first = cache.keys().next().value;
+          if (first) cache.delete(first);
+        }
+        cache.set(cacheKey, data);
+        set((s) => ({
+          channels: {
+            ...s.channels,
+            [ch]: {
+              ...s.channels[ch],
+              funcData: data,
+              funcName: data.func.name,
+              loading: false,
+              _cache: cache,
+            },
+          },
+        }));
       })
-      .catch((e) => {
-        set({ disasmText: null, disasmLoading: false, disasmError: String(e) });
+      .catch((e: any) => {
+        const msg = e?.message || String(e);
+        set((s) => ({
+          channels: {
+            ...s.channels,
+            [ch]: { ...s.channels[ch], funcData: null, loading: false, error: msg },
+          },
+        }));
       });
   },
 
-  goBack: () => {
-    const state = get();
-    if (state.historyIndex <= 0) return;
-    const newIndex = state.historyIndex - 1;
-    const func = state.history[newIndex];
-    set({ historyIndex: newIndex, currentFunc: func, currentAddr: func });
-    // Note: re-navigation would need projectId, simplified for now
+  navigateActive: (projectId: string, func: string) => {
+    get().navigateTo(get().activeChannel, projectId, func);
   },
 
-  clear: () => {
-    set({
-      currentFunc: null,
-      currentAddr: null,
-      decompileCode: null,
-      decompileError: null,
-      disasmText: null,
-      disasmError: null,
-      history: [],
-      historyIndex: -1,
-    });
+  highlightFromDecompile: (ch: string, lineIdx: number) => {
+    const data = get().channels[ch]?.funcData;
+    if (!data) return;
+
+    const line = data.decompile[lineIdx];
+    if (!line) return;
+
+    const addrs = line.addrs;
+    const allLines = new Set<number>([lineIdx]);
+    for (const addr of addrs) {
+      for (const dl of data.disasm) {
+        if (dl.addr === addr) {
+          for (const ln of dl.decompile_lines) allLines.add(ln);
+        }
+      }
+    }
+
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: {
+          ...s.channels[ch],
+          highlightDecompileLines: Array.from(allLines).sort((a, b) => a - b),
+          highlightDisasmAddrs: addrs,
+        },
+      },
+    }));
+  },
+
+  highlightFromDisasm: (ch: string, addr: string) => {
+    const data = get().channels[ch]?.funcData;
+    if (!data) return;
+
+    const insn = data.disasm.find((d) => d.addr === addr);
+    if (!insn) return;
+
+    const lines = insn.decompile_lines;
+    const allAddrs = new Set<string>([addr]);
+    for (const lineIdx of lines) {
+      const dcLine = data.decompile[lineIdx];
+      if (dcLine) {
+        for (const a of dcLine.addrs) allAddrs.add(a);
+      }
+    }
+
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: {
+          ...s.channels[ch],
+          highlightDecompileLines: lines,
+          highlightDisasmAddrs: Array.from(allAddrs),
+        },
+      },
+    }));
+  },
+
+  setHighlightToken: (ch: string, token: string | null) => {
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: { ...s.channels[ch], highlightToken: token },
+      },
+    }));
+  },
+
+  clearHighlight: (ch: string) => {
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: {
+          ...s.channels[ch],
+          highlightDecompileLines: [],
+          highlightDisasmAddrs: [],
+          highlightToken: null,
+        },
+      },
+    }));
+  },
+
+  clear: (ch: string) => {
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: emptyChannel(),
+      },
+    }));
+  },
+
+  clearAll: () => {
+    set({ channels: { A: emptyChannel() }, activeChannel: "A" });
   },
 }));

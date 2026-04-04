@@ -100,6 +100,10 @@ def register_plugin_tools(tools_metadata: list[dict[str, Any]]) -> int:
     """
     count = 0
     for meta in tools_metadata:
+        tags = meta.get("tags", [])
+        if "mcp:false" in tags:
+            log.info("Skipping MCP registration for %s (mcp:false)", meta.get("name", "?"))
+            continue
         try:
             _register_one(meta)
             count += 1

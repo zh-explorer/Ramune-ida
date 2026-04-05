@@ -135,7 +135,21 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
 
     async def local_types(request: Request) -> JSONResponse:
         pid = request.path_params["pid"]
-        return await _execute_tool(get_state, pid, "list_local_types", {})
+        params: dict[str, Any] = {}
+        kind = request.query_params.get("kind")
+        if kind:
+            params["kind"] = kind
+        filter_ = request.query_params.get("filter")
+        if filter_:
+            params["filter"] = filter_
+        return await _execute_tool(get_state, pid, "list_types", params)
+
+    async def type_detail(request: Request) -> JSONResponse:
+        pid = request.path_params["pid"]
+        name = request.query_params.get("name")
+        if not name:
+            return JSONResponse({"error": "Missing 'name' param"}, status_code=400)
+        return await _execute_tool(get_state, pid, "get_type", {"name": name})
 
     async def resolve(request: Request) -> JSONResponse:
         pid = request.path_params["pid"]
@@ -155,4 +169,5 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
         Route("/projects/{pid}/linear_view", linear_view),
         Route("/projects/{pid}/resolve", resolve),
         Route("/projects/{pid}/local_types", local_types),
+        Route("/projects/{pid}/type_detail", type_detail),
     ]

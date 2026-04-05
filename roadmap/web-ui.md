@@ -420,17 +420,18 @@ Web UI 和 API 同进程 serve，无跨域问题。开发模式下用 Vite proxy
 
 ### Phase 6：信息面板 ✅
 
-**E. Xrefs 面板 ✅**（设计待优化）
-- 自动跟随当前地址/函数，显示交叉引用列表
+**E. Xrefs 面板 ✅**
+- 手动查询模式：地址输入框 + 回车触发查询，点击结果不会刷新列表
 - 点击 xref 条目跳转到引用位置
-- 地址输入框手动查询
+- 首次加载时自动查询当前地址，后续仅用户主动触发
+- 待优化：需要快捷键（X）从其他面板触发 xrefs 查询（见 Phase 7.H）
 
 **新增面板 ✅**
 - Imports — 虚拟滚动 + 过滤，点击跳转
 - Exports — 从 survey 数据
 - Names — 虚拟滚动 + 过滤
 - Segments — 表格（名称/起止/大小/权限），点击跳到段起始
-- Local Types — 后端 `list_local_types` 工具，按 kind 着色（struct/enum/typedef/funcptr）
+- Local Types — 基于 `list_types` + `get_type` MCP 工具，按 kind 着色，点击就地展开完整 C 定义（带偏移注释 + 语法高亮），嵌套类型点击自动跳转展开
 
 **F. 搜索面板**
 - 待做：后端已有 `/api/projects/{pid}/search`
@@ -441,7 +442,12 @@ Web UI 和 API 同进程 serve，无跨域问题。开发模式下用 Vite proxy
 - 待做：代码视图右键（复制地址、查看 Xrefs、跳转）
 
 **H. 键盘快捷键**
-- 待做：G=跳转、Esc=返回、/=搜索
+- 待做：全局快捷键系统
+- X = 对当前地址/选中符号查询 Xrefs（在已有 xrefs 面板中刷新，无则新开）
+- G = 跳转到地址
+- Esc = 返回（导航历史）
+- / = 搜索
+- N = 重命名
 
 **L. 地址空间 Overview 导航条**
 - 待做：Canvas 横条，按类型着色，点击跳转，Ctrl+滚轮缩放

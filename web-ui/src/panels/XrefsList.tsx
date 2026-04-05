@@ -31,35 +31,31 @@ export function XrefsList({ tabId = "xrefs" }: { tabId?: string }) {
 
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
 
-  // Auto-load xrefs when targetAddr or currentFunc changes
+  const doQuery = useCallback((target: string) => {
+    if (!activeProjectId || !target) return;
+    setLoading(true);
+    setQueryAddr(target);
+    xrefs(activeProjectId, target)
+      .then((res) => {
+        const raw = (res as Record<string, unknown>).xrefs as string || "";
+        setEntries(parseXrefs(raw));
+      })
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [activeProjectId]);
+
+  // Only auto-load once on first meaningful address, not on every navigation
   const addr = targetAddr || currentFunc;
   useEffect(() => {
-    if (!activeProjectId || !addr) return;
-    if (addr === queryAddr) return; // Already loaded
-    setLoading(true);
-    setQueryAddr(addr);
-    xrefs(activeProjectId, addr)
-      .then((res) => {
-        const raw = (res as Record<string, unknown>).xrefs as string || "";
-        setEntries(parseXrefs(raw));
-      })
-      .catch(() => setEntries([]))
-      .finally(() => setLoading(false));
-  }, [activeProjectId, addr, queryAddr]);
+    if (!activeProjectId || !addr || queryAddr) return;
+    doQuery(addr);
+  }, [activeProjectId, addr, queryAddr, doQuery]);
 
   const handleGo = useCallback(() => {
-    if (!activeProjectId || !addrInput) return;
-    setLoading(true);
-    setQueryAddr(addrInput);
-    xrefs(activeProjectId, addrInput)
-      .then((res) => {
-        const raw = (res as Record<string, unknown>).xrefs as string || "";
-        setEntries(parseXrefs(raw));
-      })
-      .catch(() => setEntries([]))
-      .finally(() => setLoading(false));
+    if (!addrInput) return;
+    doQuery(addrInput);
     setAddrInput("");
-  }, [activeProjectId, addrInput]);
+  }, [addrInput, doQuery]);
 
   const handleClick = useCallback(
     (entry: XrefEntry) => {

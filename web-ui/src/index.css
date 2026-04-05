@@ -892,6 +892,26 @@ body {
   flex-shrink: 0;
 }
 
+/* Type definition expand block */
+.type-def-block {
+  padding: 4px 8px 8px 58px;
+  background: var(--bg-hover);
+  border-bottom: 1px solid var(--border);
+}
+.type-def-code {
+  margin: 0;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: pre;
+  color: var(--text);
+}
+.type-def-code .hl-ident:hover,
+.type-def-code .hl-kw:hover {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Segments table */
 .segments-table {
   width: 100%;

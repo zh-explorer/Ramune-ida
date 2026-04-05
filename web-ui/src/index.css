@@ -520,6 +520,34 @@ body {
   border-radius: 2px;
 }
 
+/* Navigation buttons */
+.nav-btns {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.nav-btn {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 6px;
+  line-height: 1;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--bg-active);
+  color: var(--text-primary);
+}
+
+.nav-btn:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
 .channel-menu-empty {
   padding: 5px 12px;
   color: var(--text-muted);
@@ -857,6 +885,81 @@ body {
   font-style: italic;
 }
 
+/* Type kind badge */
+.type-kind {
+  font-size: 11px;
+  min-width: 50px;
+  flex-shrink: 0;
+}
+
+/* Segments table */
+.segments-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.segments-table th {
+  text-align: left;
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 3px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.segment-row {
+  cursor: pointer;
+}
+
+.segment-row:hover {
+  background: var(--bg-hover);
+}
+
+.segment-row td {
+  padding: 3px 6px;
+}
+
+.seg-name { color: var(--text-primary); }
+.seg-addr { color: var(--accent); font-size: 11px; }
+.seg-size { color: var(--text-muted); }
+.seg-perm { color: var(--green); }
+
+/* Xrefs */
+.xrefs-count {
+  color: var(--text-muted);
+  font-size: 11px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+
+.xref-item {
+  display: flex;
+  gap: 8px;
+  padding: 3px 4px;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 3px;
+}
+
+.xref-item:hover {
+  background: var(--bg-hover);
+}
+
+.xref-addr {
+  color: var(--accent);
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.xref-text {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* HexView */
 .hex-panel {
   font-family: "JetBrains Mono", "Cascadia Code", "Fira Code", monospace;
@@ -910,6 +1013,11 @@ body {
 
 .hex-byte:nth-child(8) {
   margin-right: 8px;
+}
+
+.hex-byte-hl {
+  background: rgba(255, 213, 79, 0.3);
+  border-radius: 2px;
 }
 
 .hex-ascii {

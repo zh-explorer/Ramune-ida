@@ -51,4 +51,10 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "name": "list_local_types",
+        "description": "List local types (structs, enums, typedefs) in the IDB.",
+        "tags": ["webview", TAG_KIND_READ, TAG_MCP_FALSE],
+        "params": {},
+    },
 ]

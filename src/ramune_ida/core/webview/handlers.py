@@ -96,6 +96,57 @@ def resolve(params: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# ── list_local_types ───────────────────────────────────────────
+
+
+def list_local_types(params: dict[str, Any]) -> dict[str, Any]:
+    """List local types from the IDB's type library."""
+    import ida_typeinf
+
+    til = ida_typeinf.get_idati()
+    items: list[dict[str, Any]] = []
+
+    # IDA 9: use get_ordinal_count or iterate until failure
+    qty = getattr(ida_typeinf, 'get_ordinal_qty', None)
+    if qty:
+        count = qty(til)
+    else:
+        # Fallback: try get_ordinal_count or probe
+        count = getattr(til, 'get_ordinal_count', lambda: 0)()
+        if count == 0:
+            # Probe: try ordinals until we fail
+            count = 10000
+
+    for ordinal in range(1, count + 1):
+        name = ida_typeinf.get_numbered_type_name(til, ordinal)
+        if not name:
+            if ordinal > 100 and not items:
+                break  # No types found after many tries
+            continue
+        tif = ida_typeinf.tinfo_t()
+        if tif.get_numbered_type(til, ordinal):
+            type_str = str(tif)
+            kind = "unknown"
+            if tif.is_struct():
+                kind = "struct"
+            elif tif.is_union():
+                kind = "union"
+            elif tif.is_enum():
+                kind = "enum"
+            elif tif.is_typedef():
+                kind = "typedef"
+            elif tif.is_func():
+                kind = "funcptr"
+            items.append({
+                "ordinal": ordinal,
+                "name": name,
+                "kind": kind,
+                "type": type_str,
+            })
+
+    return {"total": len(items), "items": items}
+
+
 # ── linear_view ────────────────────────────────────────────────
 
 

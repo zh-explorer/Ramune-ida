@@ -1,6 +1,8 @@
 # Ramune-ida
 
 > **[WIP] This project is under active development. APIs and features may change without notice.**
+>
+> **The main branch contains unstable updates. For stable versions, please use commits marked with release tags.**
 
 Headless IDA Pro MCP Server — expose IDA Pro's reverse engineering capabilities to AI agents via the [Model Context Protocol](https://modelcontextprotocol.io/).
 
@@ -160,6 +162,18 @@ For Claude Desktop or Cursor, add to your MCP config:
 7. close_database(project_id)              → save and close
 8. close_project(project_id)               → clean up
 ```
+
+## Web UI (Experimental)
+
+Ramune-ida includes an optional web interface for observing AI agent activity and browsing IDA database state in real time. Enable it with `--web`:
+
+```bash
+uv run ramune-ida --web
+```
+
+Features include IDA-style linear disassembly, decompilation with syntax highlighting, cross-reference navigation, panel sync, and real-time AI activity monitoring. See [Web UI Documentation](docs/web-ui.md) for details.
+
+> **Note**: The Web UI frontend was primarily written by AI (Claude) and has not undergone thorough code review.
 
 ## Directory Layout
 

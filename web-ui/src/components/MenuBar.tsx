@@ -141,6 +141,12 @@ export function MenuBar({ onAddPanel, onResetLayout }: MenuBarProps) {
       submenu: [
         { label: "Functions", onClick: () => onAddPanel("functions") },
         { label: "Strings", onClick: () => onAddPanel("strings") },
+        { label: "Names", onClick: () => onAddPanel("names") },
+        { label: "Imports", onClick: () => onAddPanel("imports") },
+        { label: "Exports", onClick: () => onAddPanel("exports") },
+        { label: "Cross References", onClick: () => onAddPanel("xrefs") },
+        { label: "Segments", onClick: () => onAddPanel("segments") },
+        { label: "Local Types", onClick: () => onAddPanel("localtypes") },
       ],
     },
     {

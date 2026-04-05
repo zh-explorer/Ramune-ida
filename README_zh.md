@@ -1,6 +1,8 @@
 # Ramune-ida
 
 > **[开发中] 本项目正在积极开发中，API 和功能可能随时变更。**
+>
+> **主分支包含不稳定更新。如需稳定版本，请使用 tag 标注的 commit。**
 
 Headless IDA Pro MCP Server —— 通过 [Model Context Protocol](https://modelcontextprotocol.io/) 将 IDA Pro 的逆向分析能力暴露给 AI Agent。
 
@@ -160,6 +162,18 @@ Claude Desktop 或 Cursor 中添加：
 7. close_database(project_id)              → 保存并关闭
 8. close_project(project_id)               → 清理
 ```
+
+## Web UI（实验性）
+
+Ramune-ida 包含一个可选的 Web 界面，用于实时观测 AI Agent 活动和浏览 IDA 数据库状态。通过 `--web` 启用：
+
+```bash
+uv run ramune-ida --web
+```
+
+功能包括 IDA 风格线性反汇编、反编译语法高亮、交叉引用导航、面板同步、AI 实时活动监控等。详见 [Web UI 文档](docs/web-ui_zh.md)。
+
+> **注意**：Web UI 前端代码主要由 AI（Claude）编写，未经过充分的代码审查。
 
 ## 目录结构
 

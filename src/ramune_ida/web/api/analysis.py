@@ -133,6 +133,10 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
             params["direction"] = direction
         return await _execute_tool(get_state, pid, "linear_view", params)
 
+    async def local_types(request: Request) -> JSONResponse:
+        pid = request.path_params["pid"]
+        return await _execute_tool(get_state, pid, "list_local_types", {})
+
     async def resolve(request: Request) -> JSONResponse:
         pid = request.path_params["pid"]
         target = request.query_params.get("target")
@@ -150,4 +154,5 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
         Route("/projects/{pid}/func_view", func_view),
         Route("/projects/{pid}/linear_view", linear_view),
         Route("/projects/{pid}/resolve", resolve),
+        Route("/projects/{pid}/local_types", local_types),
     ]

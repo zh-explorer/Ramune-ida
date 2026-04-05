@@ -1,0 +1,89 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { listFuncs } from "../api/client";
+import { useProjectStore } from "../stores/projectStore";
+import { useViewStore } from "../stores/viewStore";
+
+interface ImportEntry {
+  addr: string;
+  name: string;
+  module: string;
+}
+
+export function ImportsList() {
+  const { activeProjectId } = useProjectStore();
+  const navigateActive = useViewStore((s) => s.navigateActive);
+  const [imports, setImports] = useState<ImportEntry[]>([]);
+  const [filter, setFilter] = useState("");
+  const [loading, setLoading] = useState(false);
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const fetchData = useCallback((initial = false) => {
+    if (!activeProjectId) return;
+    if (initial) setLoading(true);
+    fetch(`/api/projects/${activeProjectId}/imports`)
+      .then((r) => r.json())
+      .then((res) => setImports(res.items || []))
+      .catch(() => { if (initial) setImports([]); })
+      .finally(() => setLoading(false));
+  }, [activeProjectId]);
+
+  useEffect(() => {
+    if (!activeProjectId) { setImports([]); return; }
+    fetchData(true);
+  }, [activeProjectId, fetchData]);
+
+  const filtered = useMemo(() => {
+    if (!filter) return imports;
+    const lower = filter.toLowerCase();
+    return imports.filter((e) =>
+      e.name.toLowerCase().includes(lower) || e.addr.toLowerCase().includes(lower),
+    );
+  }, [imports, filter]);
+
+  const virtualizer = useVirtualizer({
+    count: filtered.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 24,
+    overscan: 20,
+  });
+
+  const handleClick = useCallback(
+    (entry: ImportEntry) => {
+      if (activeProjectId) navigateActive(activeProjectId, entry.addr);
+    },
+    [activeProjectId, navigateActive],
+  );
+
+  return (
+    <div className="panel" onFocus={() => fetchData()} tabIndex={-1}>
+      <div className="panel-header">
+        <span>Imports ({filtered.length})</span>
+      </div>
+      <div className="func-filter-bar">
+        <input className="func-filter-input" type="text" placeholder="Filter..."
+          value={filter} onChange={(e) => setFilter(e.target.value)} />
+      </div>
+      <div className="panel-body func-list-body" ref={parentRef}>
+        {loading && <div className="empty-hint">Loading...</div>}
+        {!loading && imports.length === 0 && <div className="empty-hint">No imports</div>}
+        {!loading && filtered.length > 0 && (
+          <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+            {virtualizer.getVirtualItems().map((vRow) => {
+              const entry = filtered[vRow.index];
+              return (
+                <div key={vRow.key} className="func-row"
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: vRow.size, transform: `translateY(${vRow.start}px)` }}
+                  onClick={() => handleClick(entry)}
+                >
+                  <span className="func-addr">{entry.addr}</span>
+                  <span className="func-name">{entry.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

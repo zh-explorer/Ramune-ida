@@ -13,6 +13,12 @@ import { Decompile } from "./panels/Decompile";
 import { Disassembly } from "./panels/Disassembly";
 import { HexView } from "./panels/HexView";
 import { LinearView } from "./panels/LinearView";
+import { XrefsList } from "./panels/XrefsList";
+import { ImportsList } from "./panels/ImportsList";
+import { ExportsList } from "./panels/ExportsList";
+import { NamesList } from "./panels/NamesList";
+import { SegmentsList } from "./panels/SegmentsList";
+import { LocalTypes } from "./panels/LocalTypes";
 import { useProjectStore } from "./stores/projectStore";
 import { useViewStore } from "./stores/viewStore";
 import {
@@ -33,6 +39,12 @@ const PANEL_TYPES: Record<string, { title: string; render: (tabId: string) => Re
   decompile:   { title: "Decompile",    render: (id) => <Decompile tabId={id} /> },
   disassembly: { title: "Disassembly",  render: (id) => <Disassembly tabId={id} /> },
   idaview:     { title: "IDA View",     render: (id) => <LinearView tabId={id} /> },
+  xrefs:       { title: "Xrefs",        render: () => <XrefsList /> },
+  imports:     { title: "Imports",      render: () => <ImportsList /> },
+  exports:     { title: "Exports",      render: () => <ExportsList /> },
+  names:       { title: "Names",        render: () => <NamesList /> },
+  segments:    { title: "Segments",     render: () => <SegmentsList /> },
+  localtypes:  { title: "Local Types",  render: () => <LocalTypes /> },
   activity:    { title: "Activity",     render: () => <ActivityStream /> },
 };
 
@@ -61,7 +73,7 @@ function createNewTab(type: string): TabData {
   const id = `${type}:${++tabCounter}`;
   const tab = makeTab(id);
   // Assign independent channel for syncable panels
-  if (["decompile", "disassembly", "idaview"].includes(type)) {
+  if (["decompile", "disassembly", "idaview", "xrefs", "hex"].includes(type)) {
     const store = useViewStore.getState();
     const used = new Set(Object.values(store.tabChannels));
     const free = ["B", "C", "D", "E"].find((ch) => !used.has(ch)) || "E";
@@ -101,6 +113,7 @@ function createDefaultLayout(): LayoutData {
   store.setTabChannel("decompile", "A");
   store.setTabChannel("idaview", "A");
   store.setTabChannel("disassembly", "A");
+  store.setTabChannel("hex", "A");
 
   return {
     dockbox: {

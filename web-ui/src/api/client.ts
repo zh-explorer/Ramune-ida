@@ -75,6 +75,11 @@ export const listStrings = (pid: string, filter?: string, exclude?: string) =>
     ...(exclude ? { exclude } : {}),
   });
 
+export const listNames = (pid: string, filter?: string) =>
+  request<Record<string, unknown>>(`${BASE}/projects/${pid}/names`, {
+    ...(filter ? { filter } : {}),
+  });
+
 // Activity history
 export const getActivity = (limit?: number, projectId?: string) =>
   request<{ events: import("./types").ActivityEvent[] }>(`${BASE}/activity`, {

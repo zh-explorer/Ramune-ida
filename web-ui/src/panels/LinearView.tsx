@@ -231,13 +231,20 @@ export function LinearView({ tabId = "idaview" }: { tabId?: string }) {
         store.setHighlightToken(ch, target === highlightToken ? null : target);
       }
 
-      if (line.type === "code" && line.addr && activeProjectId) {
-        const clickedFunc = line.func_name;
-        const currentFunc = funcData?.func?.name;
-        if (clickedFunc && clickedFunc !== currentFunc) {
-          store.navigateTo(ch, activeProjectId, line.addr);
-        } else {
+      // Sync address with other panels
+      if (line.addr) {
+        if (line.type === "code" && activeProjectId) {
+          const clickedFunc = line.func_name;
+          const currentFunc = funcData?.func?.name;
+          if (clickedFunc && clickedFunc !== currentFunc) {
+            store.navigateTo(ch, activeProjectId, line.addr);
+            return;
+          }
+          // Code in current function — full sync with decompile
           store.highlightFromDisasm(ch, line.addr);
+        } else {
+          // Non-code (data, string, etc.) — just set address for Hex View
+          store.setTargetAddr(ch, line.addr);
         }
       }
     },

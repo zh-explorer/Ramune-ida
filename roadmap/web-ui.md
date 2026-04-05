@@ -376,7 +376,7 @@ Web UI 和 API 同进程 serve，无跨域问题。开发模式下用 Vite proxy
 - HexView 面板（经典 hex dump + ASCII，地址输入跳转）
 - 选择高亮（`highlightSelectionMatches`，黄色底色 + 下划线）
 
-### Phase 5：跳转系统 ✅（A/B 完成，C/D 待做）
+### Phase 5：跳转系统 ✅
 
 **A. resolve 接口 ✅**
 - `core/webview/` 独立包，所有 UI 内部工具（`mcp:false`）集中管理
@@ -390,7 +390,15 @@ Web UI 和 API 同进程 serve，无跨域问题。开发模式下用 Vite proxy
 - 同函数内跳转跳过 func_view（性能优化）
 - tree-sitter C 解析器替代正则判断可导航性
 - LABEL 跳转：函数内 goto 标签前端本地跳转
-- 会话持久化：刷新后恢复上次查看的函数
+
+**C. Hex View 跟随 ✅**
+- 纳入 channel 同步体系（ChannelBadge + tabChannel）
+- targetAddr / highlightDisasmAddrs 变化时自动加载对应区域
+- 高亮当前地址对应的字节
+
+**D. 导航历史 UI ✅**
+- Decompile 面板头部 ◀ ▶ 按钮
+- goBack / goForward 方法，基于 channel 的 history + historyIndex
 
 **IDA View 重构 ✅**
 - 后端：`linear_view` 支持 `direction=forward|backward`，`prev_head` 线性反向遍历
@@ -398,65 +406,56 @@ Web UI 和 API 同进程 serve，无跨域问题。开发模式下用 Vite proxy
 - 段间 gap 自动跳过，未知字节折叠（≥64 阈值，醒目 badge）
 - 可见则不滚动优化
 
-**C. Hex View 跟随**
-- 待做：纳入 channel 同步，地址变化时自动跟随
+**反编译 ↔ 反汇编行级同步 ✅**
+- func_view 返回 eamap 行映射（ctree color tag 解析 + cinsn group 聚合）
+- 点击反编译行 → 反汇编/IDA View 高亮对应指令，反之亦然
+- 自动滚动到高亮位置居中
 
-**D. 导航历史 UI**
-- 待做：viewStore 已有 history，缺前端返回/前进按钮
+**Dock 面板布局 ✅**
+- rc-dock v3 全面板自由拖拽、浮动、合并 tab、最大化
+- Channel 同步：面板间 1:1 链接，ChannelBadge UI
+- TabTitle 响应式命名，多实例自动编号
+- 布局持久化到 localStorage
+- Tab 换行溢出（替代滚动）
 
-### Phase 6：信息面板
+### Phase 6：信息面板 ✅
 
-独立于跳转系统，可并行开发，但点击跳转依赖 Phase 5B。
+**E. Xrefs 面板 ✅**（设计待优化）
+- 自动跟随当前地址/函数，显示交叉引用列表
+- 点击 xref 条目跳转到引用位置
+- 地址输入框手动查询
 
-**E. Xrefs 面板**
-- 后端已有 `/api/projects/{pid}/xrefs`
-- 纯前端实现：显示指定地址的所有引用
-- 每条 xref 可点击跳转（依赖 B）
-- 可作为独立面板或侧边面板
+**新增面板 ✅**
+- Imports — 虚拟滚动 + 过滤，点击跳转
+- Exports — 从 survey 数据
+- Names — 虚拟滚动 + 过滤
+- Segments — 表格（名称/起止/大小/权限），点击跳到段起始
+- Local Types — 后端 `list_local_types` 工具，按 kind 着色（struct/enum/typedef/funcptr）
 
 **F. 搜索面板**
-- 后端已有 `/api/projects/{pid}/search`
-- 正则搜索 strings / names / disasm / bytes
-- 搜索结果列表，点击跳转（依赖 B）
+- 待做：后端已有 `/api/projects/{pid}/search`
 
 ### Phase 7：交互细节
 
 **G. 右键上下文菜单**
-- 依赖 B + E
-- 代码视图右键：复制地址、复制文本、查看 Xrefs、跳转到定义
-- IDA View 右键：复制地址、跳转
+- 待做：代码视图右键（复制地址、查看 Xrefs、跳转）
 
 **H. 键盘快捷键**
-- 依赖 B + D + F
-- G = 跳转到地址（弹出输入框）
-- Esc = 返回上一个视图
-- / = 聚焦搜索
-- N = 重命名（未来写操作）
+- 待做：G=跳转、Esc=返回、/=搜索
+
+**L. 地址空间 Overview 导航条**
+- 待做：Canvas 横条，按类型着色，点击跳转，Ctrl+滚轮缩放
 
 ### Phase 8：工程化
 
 **I. 构建与打包**
-- pyproject.toml hatch build hook
-- Dockerfile multi-stage 前端构建
+- 待做：pyproject.toml hatch build hook + Dockerfile multi-stage
 
 **J. 独立测试**
-- `tests/web/` — Web API 端点、Activity 拦截、WebSocket 推送
+- 待做：`tests/web/`
 
 **K. 认证**
-- 全局认证层（不在 Web UI 模块内实现）
-
-### 依赖关系
-
-```
-A (resolve) → B (统一跳转) → C (Hex跟随)
-                            → D (导航历史)
-                            → E (Xrefs) → G (右键菜单)
-                            → F (搜索)  → H (键盘快捷键)
-                                          
-I/J/K 独立，可随时做
-```
-
-实施顺序：A → B → D → C → E → F → G → H → I/J
+- 待做：全局认证层
 
 ---
 

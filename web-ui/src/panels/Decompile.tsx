@@ -94,6 +94,20 @@ export function Decompile({ tabId = "decompile" }: { tabId?: string }) {
       <div className="panel-header">
         <ChannelBadge tabId={tabId} />
         <span>Decompile{title ? `: ${title}` : ""}</span>
+        <div className="nav-btns">
+          <button
+            className="nav-btn"
+            disabled={!store.canGoBack(ch)}
+            onClick={() => activeProjectId && store.goBack(ch, activeProjectId)}
+            title="Back"
+          >◀</button>
+          <button
+            className="nav-btn"
+            disabled={!store.canGoForward(ch)}
+            onClick={() => activeProjectId && store.goForward(ch, activeProjectId)}
+            title="Forward"
+          >▶</button>
+        </div>
       </div>
       <div className="panel-body code-panel-body" ref={containerRef}>
         {loading && <div className="code-overlay">Loading...</div>}

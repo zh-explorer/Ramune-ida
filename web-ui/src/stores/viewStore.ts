@@ -66,8 +66,13 @@ interface ViewStore {
 
   navigateTo: (ch: string, projectId: string, func: string) => void;
   navigateActive: (projectId: string, func: string) => void;
+  goBack: (ch: string, projectId: string) => void;
+  goForward: (ch: string, projectId: string) => void;
+  canGoBack: (ch: string) => boolean;
+  canGoForward: (ch: string) => boolean;
   highlightFromDecompile: (ch: string, lineIdx: number) => void;
   highlightFromDisasm: (ch: string, addr: string) => void;
+  setTargetAddr: (ch: string, addr: string) => void;
   setHighlightToken: (ch: string, token: string | null) => void;
   clearHighlight: (ch: string) => void;
   clear: (ch: string) => void;
@@ -229,6 +234,88 @@ export const useViewStore = create<ViewStore>((set, get) => ({
 
   navigateActive: (projectId: string, func: string) => {
     get().navigateTo(get().activeChannel, projectId, func);
+  },
+
+  goBack: (ch: string, projectId: string) => {
+    const channel = get().channels[ch];
+    if (!channel || channel.historyIndex <= 0) return;
+    const newIndex = channel.historyIndex - 1;
+    const target = channel.history[newIndex];
+    // Set index without pushing to history
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: { ...s.channels[ch], historyIndex: newIndex },
+      },
+    }));
+    // Navigate without adding to history (call resolve + load directly)
+    get().navigateTo(ch, projectId, target);
+    // Fix: navigateTo pushes to history, so undo that
+    set((s) => {
+      const c = s.channels[ch];
+      if (!c) return s;
+      return {
+        channels: {
+          ...s.channels,
+          [ch]: {
+            ...c,
+            history: channel.history, // restore original history
+            historyIndex: newIndex,
+          },
+        },
+      };
+    });
+  },
+
+  goForward: (ch: string, projectId: string) => {
+    const channel = get().channels[ch];
+    if (!channel || channel.historyIndex >= channel.history.length - 1) return;
+    const newIndex = channel.historyIndex + 1;
+    const target = channel.history[newIndex];
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: { ...s.channels[ch], historyIndex: newIndex },
+      },
+    }));
+    get().navigateTo(ch, projectId, target);
+    set((s) => {
+      const c = s.channels[ch];
+      if (!c) return s;
+      return {
+        channels: {
+          ...s.channels,
+          [ch]: {
+            ...c,
+            history: channel.history,
+            historyIndex: newIndex,
+          },
+        },
+      };
+    });
+  },
+
+  canGoBack: (ch: string) => {
+    const channel = get().channels[ch];
+    return !!channel && channel.historyIndex > 0;
+  },
+
+  canGoForward: (ch: string) => {
+    const channel = get().channels[ch];
+    return !!channel && channel.historyIndex < channel.history.length - 1;
+  },
+
+  setTargetAddr: (ch: string, addr: string) => {
+    set((s) => ({
+      channels: {
+        ...s.channels,
+        [ch]: {
+          ...s.channels[ch],
+          highlightDisasmAddrs: [addr],
+          targetAddr: addr,
+        },
+      },
+    }));
   },
 
   highlightFromDecompile: (ch: string, lineIdx: number) => {

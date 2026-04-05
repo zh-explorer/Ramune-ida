@@ -165,6 +165,8 @@ For Claude Desktop or Cursor, add to your MCP config:
 
 ## Web UI (Experimental)
 
+<img src="docs/web-ui-demo.gif" width="800" />
+
 Ramune-ida includes an optional web interface for observing AI agent activity and browsing IDA database state in real time. Enable it with `--web`:
 
 ```bash

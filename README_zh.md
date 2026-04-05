@@ -165,6 +165,8 @@ Claude Desktop 或 Cursor 中添加：
 
 ## Web UI（实验性）
 
+<img src="docs/web-ui-demo.gif" width="800" />
+
 Ramune-ida 包含一个可选的 Web 界面，用于实时观测 AI Agent 活动和浏览 IDA 数据库状态。通过 `--web` 启用：
 
 ```bash

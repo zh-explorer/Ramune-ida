@@ -187,9 +187,9 @@ Ramune-ida ships with 8 built-in tool packages under `core/`. They follow the ex
 | Annotation | `core/annotate/` | `rename`, `get_comment`, `set_comment` | Symbol renaming, comments |
 | Data | `core/data/` | `examine`, `get_bytes` | Memory inspection |
 | Execution | `core/execution/` | `execute_python` | Arbitrary IDAPython execution |
-| Listing | `core/listing/` | `list_funcs`, `list_strings`, `list_imports`, `list_names` | Enumeration with filtering/pagination |
+| Listing | `core/listing/` | `list_funcs`, `list_strings`, `list_imports`, `list_names`, `list_types` | Enumeration with filtering/pagination |
 | Search | `core/search/` | `search`, `search_bytes` | Regex and byte pattern search |
-| Types | `core/types/` | `set_type`, `define_type` | Type annotation and declaration |
+| Types | `core/types/` | `set_type`, `define_type`, `get_type` | Type query, annotation and declaration |
 | Undo | `core/undo/` | `undo` | IDA 9.0+ native undo |
 
 To add a new built-in tool, create a metadata entry and handler in the appropriate domain package — or create a new domain package under `core/`.

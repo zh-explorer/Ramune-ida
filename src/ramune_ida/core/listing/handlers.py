@@ -127,3 +127,48 @@ def list_names(params: dict[str, Any]) -> dict[str, Any]:
         items.append({"addr": hex(ea), "name": name})
 
     return _wrap(items)
+
+
+def _classify_tinfo(tif: Any) -> str:
+    """Return kind string for a tinfo_t."""
+    if tif.is_struct():
+        return "struct"
+    if tif.is_union():
+        return "union"
+    if tif.is_enum():
+        return "enum"
+    return "typedef"
+
+
+def list_types(params: dict[str, Any]) -> dict[str, Any]:
+    """List types in the local type library."""
+    import ida_typeinf
+
+    pred = _make_predicate(*_extract_filter(params))
+    kind_filter = (params.get("kind") or "").lower()
+
+    til = ida_typeinf.get_idati()
+    limit = ida_typeinf.get_ordinal_limit(til)
+
+    items: list[str] = []
+    for ordinal in range(1, limit):
+        tif = ida_typeinf.tinfo_t()
+        if not tif.get_numbered_type(til, ordinal):
+            continue
+        name = tif.get_type_name()
+        if not name:
+            continue
+
+        kind = _classify_tinfo(tif)
+        if kind_filter and kind != kind_filter:
+            continue
+        if pred and not pred(name):
+            continue
+
+        size = tif.get_size()
+        if kind == "typedef":
+            items.append("typedef %s" % name)
+        else:
+            items.append("%s %s // sizeof=0x%X" % (kind, name, size))
+
+    return {"total": len(items), "items": items}

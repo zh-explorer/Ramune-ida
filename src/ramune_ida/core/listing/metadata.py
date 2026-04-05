@@ -54,4 +54,17 @@ TOOLS: list[dict] = [
         "tags": ["listing", TAG_KIND_READ],
         "params": {**_COMMON_PARAMS},
     },
+    {
+        "name": "list_types",
+        "description": "List types in the local type library (structs, enums, unions, typedefs).",
+        "tags": ["listing", TAG_KIND_READ],
+        "params": {
+            **_COMMON_PARAMS,
+            "kind": {
+                "type": "string",
+                "required": False,
+                "description": "Filter by kind: struct, enum, union, typedef",
+            },
+        },
+    },
 ]

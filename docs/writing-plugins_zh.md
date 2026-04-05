@@ -187,9 +187,9 @@ Ramune-ida 在 `core/` 下内置了 8 个工具包。它们遵循与外部插件
 | 标注 | `core/annotate/` | `rename`, `get_comment`, `set_comment` | 符号重命名、注释 |
 | 数据 | `core/data/` | `examine`, `get_bytes` | 内存检查 |
 | 执行 | `core/execution/` | `execute_python` | 任意 IDAPython 执行 |
-| 列表 | `core/listing/` | `list_funcs`, `list_strings`, `list_imports`, `list_names` | 枚举（支持过滤/分页） |
+| 列表 | `core/listing/` | `list_funcs`, `list_strings`, `list_imports`, `list_names`, `list_types` | 枚举（支持过滤/分页） |
 | 搜索 | `core/search/` | `search`, `search_bytes` | 正则和字节模式搜索 |
-| 类型 | `core/types/` | `set_type`, `define_type` | 类型标注和声明 |
+| 类型 | `core/types/` | `set_type`, `define_type`, `get_type` | 类型查询、标注和声明 |
 | 撤销 | `core/undo/` | `undo` | IDA 9.0+ 原生 undo |
 
 添加新的内置工具，只需在对应的领域包中增加 metadata 条目和 handler——或在 `core/` 下新建一个领域包。

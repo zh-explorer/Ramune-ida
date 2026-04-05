@@ -929,3 +929,42 @@ async def test_define_type(mcp_app):
     })
     assert r["echo"] == "plugin:define_type"
     assert r["params"]["declare"] == "struct Foo { int a; char *b; };"
+
+
+# ── get_type ────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_get_type(mcp_app):
+    mcp = mcp_app
+    pid = await _setup_project(mcp, "gt-basic")
+    r = await call(mcp, "get_type", {
+        "project_id": pid,
+        "name": "MyStruct",
+    })
+    assert r["echo"] == "plugin:get_type"
+    assert r["params"]["name"] == "MyStruct"
+
+
+# ── list_types ──────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_list_types_registered(mcp_app):
+    mcp = mcp_app
+    pid = await _setup_project(mcp, "lt-reg")
+    r = await call(mcp, "list_types", {"project_id": pid})
+    assert r["echo"] == "plugin:list_types"
+
+
+@pytest.mark.asyncio
+async def test_list_types_with_filter(mcp_app):
+    mcp = mcp_app
+    pid = await _setup_project(mcp, "lt-filter")
+    r = await call(mcp, "list_types", {
+        "project_id": pid,
+        "filter": "Elf",
+        "kind": "struct",
+    })
+    assert r["params"]["filter"] == "Elf"
+    assert r["params"]["kind"] == "struct"

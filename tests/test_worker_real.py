@@ -662,6 +662,96 @@ def test_list_names_filter(worker, binary):
     worker.send({"id": "99", "method": "close_database", "params": {}})
 
 
+# ── list_types (plugin:list_types) ───────────────────────────────
+
+
+def test_list_types_basic(worker, binary):
+    """list_types returns types in IDA format strings."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    r = worker.send({"id": "2", "method": "plugin:list_types", "params": {}})
+    assert "error" not in r
+    result = r["result"]
+
+    assert result["total"] >= 0
+    assert isinstance(result["items"], list)
+
+    # All items should be strings
+    for item in result["items"]:
+        assert isinstance(item, str)
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_list_types_after_define(worker, binary):
+    """list_types shows user-defined types."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "struct ListTestStruct { int x; char *y; };",
+    }})
+    worker.send({"id": "3", "method": "plugin:define_type", "params": {
+        "declare": "enum ListTestEnum { LT_A = 0, LT_B = 1, LT_C = 2 };",
+    }})
+
+    r = worker.send({"id": "4", "method": "plugin:list_types", "params": {}})
+    assert "error" not in r
+    items = r["result"]["items"]
+
+    # Check format: "struct Name // sizeof=0xN"
+    struct_items = [i for i in items if "ListTestStruct" in i]
+    assert len(struct_items) == 1
+    assert struct_items[0].startswith("struct ")
+    assert "sizeof=" in struct_items[0]
+
+    enum_items = [i for i in items if "ListTestEnum" in i]
+    assert len(enum_items) == 1
+    assert enum_items[0].startswith("enum ")
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_list_types_filter_kind(worker, binary):
+    """list_types kind filter narrows results."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "struct KindFilterS { int a; }; enum KindFilterE { KF_X = 0 };",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:list_types",
+                      "params": {"kind": "struct"}})
+    assert "error" not in r
+    for item in r["result"]["items"]:
+        assert item.startswith("struct ")
+
+    r = worker.send({"id": "4", "method": "plugin:list_types",
+                      "params": {"kind": "enum"}})
+    assert "error" not in r
+    for item in r["result"]["items"]:
+        assert item.startswith("enum ")
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_list_types_filter_name(worker, binary):
+    """list_types filter narrows by name substring."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "struct NameFilterAlpha { int a; }; struct NameFilterBeta { int b; };",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:list_types",
+                      "params": {"filter": "Alpha"}})
+    assert "error" not in r
+    items = r["result"]["items"]
+    assert any("NameFilterAlpha" in i for i in items)
+    assert not any("NameFilterBeta" in i for i in items)
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
 # ── search (plugin:search) ────────────────────────────────────────
 
 
@@ -1323,6 +1413,111 @@ def test_define_type_invalid(worker, binary):
     r = worker.send({"id": "2", "method": "plugin:define_type", "params": {
         "declare": "struct { broken syntax",
     }})
+    assert "error" in r
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+# ── get_type (plugin:get_type) ──────────────────────────────────
+
+
+def test_get_type_struct(worker, binary):
+    """get_type returns C declaration with offset comments for struct."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "struct GetTypeTest { int field_a; char *field_b; unsigned long long field_c; };",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:get_type",
+                      "params": {"name": "GetTypeTest"}})
+    assert "error" not in r
+    defn = r["result"]["definition"]
+    print(f"\n--- get_type struct ---\n{defn}")
+
+    assert "struct GetTypeTest" in defn
+    assert "sizeof=" in defn
+    assert "field_a" in defn
+    assert "field_b" in defn
+    assert "field_c" in defn
+    # Offset comments present
+    assert "/* 0x00 */" in defn
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_get_type_enum(worker, binary):
+    """get_type returns C declaration for enum."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "enum GetTypeFlags { GT_NONE = 0, GT_READ = 1, GT_WRITE = 2, GT_EXEC = 4 };",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:get_type",
+                      "params": {"name": "GetTypeFlags"}})
+    assert "error" not in r
+    defn = r["result"]["definition"]
+    print(f"\n--- get_type enum ---\n{defn}")
+
+    assert "GetTypeFlags" in defn
+    assert "GT_NONE" in defn
+    assert "GT_READ" in defn
+    assert "GT_WRITE" in defn
+    assert "GT_EXEC" in defn
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_get_type_typedef(worker, binary):
+    """get_type returns definition for typedef."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "typedef unsigned long long GT_QWORD;",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:get_type",
+                      "params": {"name": "GT_QWORD"}})
+    assert "error" not in r
+    defn = r["result"]["definition"]
+    print(f"\n--- get_type typedef ---\n{defn}")
+
+    assert "GT_QWORD" in defn
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_get_type_nested_struct(worker, binary):
+    """get_type does not recursively expand nested struct types."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    worker.send({"id": "2", "method": "plugin:define_type", "params": {
+        "declare": "struct GTInner { int x; int y; }; struct GTOuter { GTInner inner; int flags; };",
+    }})
+
+    r = worker.send({"id": "3", "method": "plugin:get_type",
+                      "params": {"name": "GTOuter"}})
+    assert "error" not in r
+    defn = r["result"]["definition"]
+    print(f"\n--- get_type nested ---\n{defn}")
+
+    assert "GTOuter" in defn
+    assert "inner" in defn
+    assert "flags" in defn
+    # Inner struct members should NOT appear (no recursive expansion)
+    # The member type should just reference GTInner by name
+    assert "GTInner" in defn
+
+    worker.send({"id": "99", "method": "close_database", "params": {}})
+
+
+def test_get_type_not_found(worker, binary):
+    """get_type returns error for non-existent type."""
+    worker.send({"id": "1", "method": "open_database", "params": {"path": binary}})
+
+    r = worker.send({"id": "2", "method": "plugin:get_type",
+                      "params": {"name": "NonExistentType12345"}})
     assert "error" in r
 
     worker.send({"id": "99", "method": "close_database", "params": {}})

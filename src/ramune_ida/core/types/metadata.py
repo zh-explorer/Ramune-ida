@@ -1,8 +1,8 @@
-"""Metadata for type system tools (set_type, define_type)."""
+"""Metadata for type system tools (set_type, define_type, get_type)."""
 
 from __future__ import annotations
 
-from ramune_ida.worker.tags import TAG_KIND_WRITE
+from ramune_ida.worker.tags import TAG_KIND_READ, TAG_KIND_WRITE
 
 TOOLS: list[dict] = [
     {
@@ -50,6 +50,21 @@ TOOLS: list[dict] = [
                 "type": "string",
                 "required": True,
                 "description": "C type declaration(s)",
+            },
+        },
+    },
+    {
+        "name": "get_type",
+        "description": (
+            "Get the full C definition of a type. "
+            "Call again for nested types."
+        ),
+        "tags": ["types", TAG_KIND_READ],
+        "params": {
+            "name": {
+                "type": "string",
+                "required": True,
+                "description": "Type name to look up",
             },
         },
     },

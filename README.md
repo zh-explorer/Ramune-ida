@@ -43,15 +43,15 @@ MCP Client (Claude / Cursor / ...)
 
 ## Tools
 
-Ramune-ida provides **26 tools** (19 plugin tools + 7 session tools) covering the core reverse engineering workflow:
+Ramune-ida provides **28 tools** (21 plugin tools + 7 session tools) covering the core reverse engineering workflow:
 
 - **Session** (7) — project lifecycle, database open/close, async task management
 - **Analysis** (4) — decompile, disassemble, cross-references, binary overview
 - **Annotation** (3) — rename symbols, read/write comments
 - **Data** (2) — auto-detect address type, read raw bytes
-- **Listing** (4) — enumerate functions, strings, imports, names (with filtering)
+- **Listing** (5) — enumerate functions, strings, imports, names, types (with filtering)
 - **Search** (2) — regex search across strings/names/disasm, byte pattern search
-- **Types** (2) — set types on functions/variables, declare C types (struct/enum/typedef)
+- **Types** (3) — get/set types on functions/variables, declare C types (struct/enum/typedef)
 - **Execution** (1) — run arbitrary IDAPython with stdout/stderr capture
 - **Undo** (1) — IDA 9.0+ native undo
 

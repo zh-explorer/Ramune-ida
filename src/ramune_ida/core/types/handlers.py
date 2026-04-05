@@ -169,6 +169,118 @@ def _set_type_local(
     }
 
 
+def get_type(params: dict[str, Any]) -> dict[str, Any]:
+    """Get the full definition of a named type."""
+    import ida_typeinf
+
+    name = params.get("name", "")
+    if not name:
+        raise ToolError(-4, "Missing required parameter: name")
+
+    til = ida_typeinf.get_idati()
+    tif = ida_typeinf.tinfo_t()
+    if not tif.get_named_type(til, name):
+        raise ToolError(-4, "Type not found: %s" % name)
+
+    if tif.is_struct() or tif.is_union():
+        definition = _format_udt(tif, name)
+    elif tif.is_enum():
+        definition = _format_enum(tif, name)
+    else:
+        # typedef and others — use print_decls via text_sink_t
+        definition = _print_type_decl(til, tif, name)
+
+    return {"definition": definition}
+
+
+def _print_type_decl(til: Any, tif: Any, name: str) -> str:
+    """Format a type via print_decls (typedef, etc.)."""
+    import ida_typeinf
+
+    ordinal = tif.get_ordinal()
+    if not ordinal:
+        return "typedef %s;" % name
+
+    class _Sink(ida_typeinf.text_sink_t):
+        def __init__(self) -> None:
+            super().__init__()
+            self.parts: list[str] = []
+
+        def _print(self, *args: Any) -> int:
+            if args:
+                self.parts.append(str(args[0]))
+            return 0
+
+    sink = _Sink()
+    ida_typeinf.print_decls(sink, til, [ordinal], ida_typeinf.PDF_DEF_FWD)
+    text = "".join(sink.parts).strip()
+    # Remove ordinal comment like "/* 6 */\n"
+    if text.startswith("/*"):
+        nl = text.find("\n")
+        if nl >= 0:
+            text = text[nl + 1:].strip()
+    return text or "typedef %s;" % name
+
+
+def _format_enum(tif: Any, name: str) -> str:
+    """Format an enum as C declaration."""
+    import ida_typeinf
+
+    ed = ida_typeinf.enum_type_data_t()
+    if not tif.get_enum_details(ed):
+        return "enum %s;" % name
+
+    lines: list[str] = []
+    size = tif.get_size()
+    lines.append("enum %s // sizeof=0x%X" % (name, size))
+    lines.append("{")
+
+    for i in range(ed.size()):
+        m = ed[i]
+        trail = "," if i < ed.size() - 1 else ""
+        lines.append("    %s = 0x%X%s" % (m.name, m.value, trail))
+
+    lines.append("};")
+    return "\n".join(lines)
+
+
+def _format_udt(tif: Any, name: str) -> str:
+    """Format a struct/union as C declaration with offset comments."""
+    import ida_typeinf
+
+    udt = ida_typeinf.udt_type_data_t()
+    if not tif.get_udt_details(udt):
+        til = ida_typeinf.get_idati()
+        return _print_type_decl(til, tif, name)
+
+    keyword = "union" if tif.is_union() else "struct"
+    size = tif.get_size()
+    lines: list[str] = []
+    lines.append("%s %s // sizeof=0x%X" % (keyword, name, size))
+    lines.append("{")
+
+    for i in range(udt.size()):
+        member = udt[i]
+        mname = member.name or ("__field_%d" % i)
+        mtype = str(member.type)
+        byte_offset = member.offset // 8
+
+        if member.is_bitfield():
+            bit_offset = member.offset % 8
+            bit_size = member.size
+            lines.append(
+                "    /* 0x%02X:%d */ %s %s : %d;"
+                % (byte_offset, bit_offset, mtype, mname, bit_size)
+            )
+        else:
+            lines.append(
+                "    /* 0x%02X */ %s %s;" % (byte_offset, mtype, mname)
+            )
+
+    lines.append("};")
+    return "\n".join(lines)
+
+
 def define_type(params: dict[str, Any]) -> dict[str, Any]:
     """Declare C types (struct, enum, typedef, union) in the local type library."""
     import ida_typeinf

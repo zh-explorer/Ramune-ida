@@ -19,7 +19,8 @@ class ActivityEvent:
 
     __slots__ = (
         "id", "timestamp", "project_id", "tool_name",
-        "params_summary", "status", "duration_ms", "kind",
+        "params_summary", "params_full", "result_summary",
+        "status", "duration_ms", "kind",
     )
 
     def __init__(
@@ -28,12 +29,15 @@ class ActivityEvent:
         params_summary: str,
         project_id: str | None = None,
         kind: str = "read",
+        params_full: dict | None = None,
     ) -> None:
         self.id = uuid.uuid4().hex[:12]
         self.timestamp = time.time()
         self.project_id = project_id
         self.tool_name = tool_name
         self.params_summary = params_summary
+        self.params_full = params_full
+        self.result_summary: str | None = None
         self.status: str = "pending"
         self.duration_ms: float | None = None
         self.kind = kind
@@ -51,7 +55,45 @@ class ActivityEvent:
             d["project_id"] = self.project_id
         if self.duration_ms is not None:
             d["duration_ms"] = self.duration_ms
+        if self.params_full:
+            d["params"] = self.params_full
+        if self.result_summary:
+            d["result_summary"] = self.result_summary
         return d
+
+
+def _extract_result_summary(body: bytes, rpc_id: str) -> str | None:
+    """Try to extract a human-readable result summary from the SSE/JSON response."""
+    try:
+        # SSE format: "event: message\ndata: {json}\n\n"
+        text = body.decode("utf-8", errors="ignore")
+        for line in text.split("\n"):
+            if line.startswith("data: "):
+                data = orjson.loads(line[6:])
+                result = data.get("result", {})
+                content = result.get("content", [])
+                if content and isinstance(content, list):
+                    for item in content:
+                        if isinstance(item, dict) and item.get("text"):
+                            # Parse the tool result text (JSON)
+                            try:
+                                parsed = orjson.loads(item["text"])
+                                # Extract key fields for summary
+                                parts = []
+                                for key in ("result", "output", "error", "old_name", "new_name",
+                                             "new_type", "old_type", "total", "status"):
+                                    if key in parsed:
+                                        val = str(parsed[key])
+                                        if len(val) > 150:
+                                            val = val[:147] + "..."
+                                        parts.append(f"{key}={val}")
+                                return ", ".join(parts[:4]) if parts else None
+                            except Exception:
+                                val = item["text"]
+                                return val[:200] if len(val) > 200 else val
+    except Exception:
+        pass
+    return None
 
 
 def _summarize_params(tool_name: str, params: dict[str, Any]) -> str:
@@ -80,13 +122,18 @@ class ActivityStore:
         self._pending[rpc_id] = (event, time.monotonic())
         self._broadcast(event)
 
-    def record_complete(self, rpc_id: str, failed: bool = False) -> None:
+    def record_complete(
+        self, rpc_id: str, failed: bool = False,
+        result_summary: str | None = None,
+    ) -> None:
         entry = self._pending.pop(rpc_id, None)
         if entry is None:
             return
         event, start_time = entry
         event.status = "failed" if failed else "completed"
         event.duration_ms = round((time.monotonic() - start_time) * 1000, 1)
+        if result_summary:
+            event.result_summary = result_summary
         self._broadcast(event)
 
     def get_history(
@@ -153,6 +200,7 @@ class ActivityMiddleware:
         self._current_capture = capture_rpc_id
 
         response_status = 200
+        response_chunks: list[bytes] = []
 
         async def capture_send(msg: Message) -> None:
             nonlocal response_status
@@ -160,7 +208,16 @@ class ActivityMiddleware:
                 response_status = msg.get("status", 200)
             elif msg["type"] == "http.response.body":
                 if rpc_id is not None:
-                    self.store.record_complete(rpc_id, failed=(response_status >= 400))
+                    response_chunks.append(msg.get("body", b""))
+                    if not msg.get("more_body", False):
+                        summary = _extract_result_summary(
+                            b"".join(response_chunks), rpc_id,
+                        )
+                        self.store.record_complete(
+                            rpc_id,
+                            failed=(response_status >= 400),
+                            result_summary=summary,
+                        )
             await send(msg)
 
         await self.app(scope, buffered_receive, capture_send)
@@ -186,10 +243,17 @@ class ActivityMiddleware:
             project_id = arguments.get("project_id")
             summary = _summarize_params(tool_name, arguments)
 
+            # Store full params (excluding project_id and overly long values)
+            detail = {k: v for k, v in arguments.items() if k != "project_id"}
+            for k, v in detail.items():
+                if isinstance(v, str) and len(v) > 200:
+                    detail[k] = v[:200] + "..."
+
             event = ActivityEvent(
                 tool_name=tool_name,
                 params_summary=summary,
                 project_id=project_id,
+                params_full=detail if detail else None,
             )
 
             if rpc_id is not None:

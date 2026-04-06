@@ -94,4 +94,6 @@ export interface ActivityEvent {
   project_id?: string;
   duration_ms?: number;
   kind: string;
+  params?: Record<string, unknown>;
+  result_summary?: string;
 }

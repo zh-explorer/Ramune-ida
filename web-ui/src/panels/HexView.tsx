@@ -155,9 +155,12 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
     jumpTo("0x0");
   }, [activeProjectId]); // eslint-disable-line
 
-  // ── Follow targetAddr ──
+  // ── Follow targetAddr (debounced to avoid flooding worker queue) ──
+  const jumpTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!targetAddr) return;
+
+    // Try to scroll within already-loaded data first (no API call)
     const aligned = "0x" + (parseInt(targetAddr, 16) & ~0xF).toString(16);
     const el = containerRef.current?.querySelector(`[data-addr="${aligned}"]`);
 
@@ -165,7 +168,6 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
       const tNum = parseInt(targetAddr, 16);
       const first = rows[0].addrNum;
       const last = rows[rows.length - 1].addrNum;
-      // Find closest row if within range
       if (tNum >= first && tNum <= last + PER_ROW) {
         let closest: HexRow | null = null;
         for (const r of rows) {
@@ -187,9 +189,16 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
       if (rect.top < cRect.top || rect.bottom > cRect.bottom) {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
       }
-    } else {
-      jumpTo(targetAddr);
+      return;
     }
+
+    // Not in loaded range — debounce the jumpTo to avoid queue flooding
+    if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current);
+    jumpTimerRef.current = setTimeout(() => {
+      if (!loadingRef.current) jumpTo(targetAddr);
+    }, 300);
+
+    return () => { if (jumpTimerRef.current) clearTimeout(jumpTimerRef.current); };
   }, [targetAddr]); // eslint-disable-line
 
   // ── Scroll handler ──

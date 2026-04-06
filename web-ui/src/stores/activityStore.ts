@@ -72,6 +72,17 @@ export function connectActivityStream() {
       ) {
         for (const cb of _dbOpenCallbacks) cb(event.project_id);
       }
+      // Refresh decompile cache on write operations (rename, set_comment, etc.)
+      // Only invalidate func cache — don't refresh all list panels to avoid
+      // flooding the worker queue with serial requests
+      if (
+        event.status === "completed" &&
+        event.kind === "write" &&
+        event.project_id
+      ) {
+        const { useViewStore } = require("./viewStore");
+        useViewStore.getState().invalidateCache();
+      }
     } catch {
       // ignore malformed
     }

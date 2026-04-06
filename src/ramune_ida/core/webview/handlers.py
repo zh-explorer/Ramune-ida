@@ -160,6 +160,9 @@ def hex_view(params: dict[str, Any]) -> dict[str, Any]:
                 prev = prev_seg_addr(cur)
                 if prev is None:
                     break
+                # Ensure we don't land in the same gap
+                if prev == cur:
+                    break
                 cur = prev
         rows.reverse()
         has_more = cur >= min_ea and prev_seg_addr(cur) is not None
@@ -174,7 +177,9 @@ def hex_view(params: dict[str, Any]) -> dict[str, Any]:
                 nxt = next_seg_start(cur)
                 if nxt is None:
                     break
-                cur = nxt & ~0xF
+                aligned = nxt & ~0xF
+                # If aligned addr is still in gap, use the segment start directly
+                cur = aligned if in_segment(aligned) else nxt
         has_more = cur < max_ea and next_seg_start(cur) is not None
 
     return {"rows": rows, "has_more": has_more}
@@ -628,11 +633,26 @@ def func_view(params: dict[str, Any]) -> dict[str, Any]:
             "addrs": mapped_addrs,
         })
 
+    # ── Function comment ─────────────────────────────────────────
+    func_comment = idc.get_func_cmt(start_ea, 1) or idc.get_func_cmt(start_ea, 0) or ""
+
+    # Prepend comment as decompile lines if present
+    if func_comment:
+        comment_lines = []
+        for i, cline in enumerate(func_comment.split("\n")):
+            comment_lines.append({
+                "line": -(i + 1),
+                "text": "// " + cline,
+                "addrs": [],
+            })
+        decompile_lines = comment_lines + decompile_lines
+
     return {
         "func": {
             "addr": hex(start_ea),
             "end": hex(end_ea),
             "name": func_name,
+            "comment": func_comment,
         },
         "decompile": decompile_lines,
         "disasm": disasm_lines,

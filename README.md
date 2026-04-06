@@ -104,37 +104,6 @@ uv run ramune-ida --worker-python /opt/ida/python3
 uv run ramune-ida sse://127.0.0.1:9000
 ```
 
-### Docker
-
-Requires a pre-built `ida-pro:latest` base image with IDA Pro installed (see [docker-ida](https://github.com/user/docker-ida)).
-
-```bash
-# Build
-docker build -t ramune-ida .
-
-# Run (default: http://0.0.0.0:8000)
-docker run -p 8000:8000 ramune-ida
-
-# With custom settings
-docker run -p 8745:8745 \
-  -e TRANSPORT="http://0.0.0.0:8745" \
-  -e SOFT_LIMIT=2 \
-  -e HARD_LIMIT=4 \
-  ramune-ida
-
-# Persist data directory (projects + plugins)
-docker run -p 8000:8000 \
-  -v /path/to/data:/data/ramune-ida \
-  ramune-ida
-```
-
-| Environment Variable | Default | Description |
-|---|---|---|
-| `TRANSPORT` | `http://0.0.0.0:8000` | Transport URL |
-| `SOFT_LIMIT` | `4` | Advisory threshold for concurrent workers |
-| `HARD_LIMIT` | `8` | Maximum concurrent workers |
-| `RAMUNE_DATA_DIR` | `/data/ramune-ida` | Data directory (projects + plugins) |
-
 ### MCP Client Configuration
 
 For Claude Desktop or Cursor, add to your MCP config:
@@ -173,7 +142,21 @@ Ramune-ida includes an optional web interface for observing AI agent activity an
 uv run ramune-ida --web
 ```
 
-Features include IDA-style linear disassembly, decompilation with syntax highlighting, cross-reference navigation, panel sync, and real-time AI activity monitoring. See [Web UI Documentation](docs/web-ui.md) for details.
+**Features:**
+- IDA-style linear disassembly (IDA View) with virtual scrolling and bidirectional loading
+- Decompilation with tree-sitter C syntax highlighting and line-level sync
+- Hex View with byte-level selection, multi-format copy, and virtual scrolling
+- Address space overview bar with per-pixel type mapping, zoom, and click-to-navigate
+- Right-click context menu on all panels (Copy address, Xrefs, Go to definition)
+- Keyboard shortcuts (X=Xrefs, G=Search, Esc=Back, mouse side buttons)
+- Cross-reference panel with manual query mode
+- Local Types browser with inline C definition expansion and nested type navigation
+- Search panel (regex + byte pattern)
+- Real-time AI activity stream with per-tool detail expansion
+- Dockable panel layout (drag, float, merge tabs) with persistent state
+- Auto-navigate to main/start on database open
+
+See [Web UI Documentation](docs/web-ui.md) for details.
 
 > **Note**: The Web UI frontend was primarily written by AI (Claude) and has not undergone thorough code review.
 
@@ -197,6 +180,46 @@ All data is stored under a single data directory (default `~/.ramune-ida`, confi
 | `--data-dir` | `~/.ramune-ida` | Data directory for projects and plugins (`RAMUNE_DATA_DIR`) |
 | `--auto-save-interval` | `300` | Seconds between auto-saves (0 = disabled) |
 | `--output-max-length` | `20000` | Truncate tool output beyond this many chars |
+| `--web` | off | Enable Web UI on the same port |
+
+## Building
+
+### From source
+
+```bash
+git clone https://github.com/user/Ramune-ida.git
+cd Ramune-ida
+uv sync
+uv run ramune-ida
+```
+
+### With frontend rebuild
+
+Requires Node.js >= 18:
+
+```bash
+RAMUNE_BUILD_WEB=1 uv build
+```
+
+Without `RAMUNE_BUILD_WEB`, `uv build` uses the pre-built frontend assets in the repository.
+
+### Docker
+
+Requires a pre-built `ida-pro:latest` base image with IDA Pro installed
+
+The Dockerfile uses multi-stage build — Node.js builds the frontend, the final image only contains Python + IDA. Web UI is enabled by default.
+
+```bash
+docker build -t ramune-ida .
+docker run -p 8000:8000 ramune-ida
+```
+
+| Environment Variable | Default | Description |
+|---|---|---|
+| `TRANSPORT` | `http://0.0.0.0:8000` | Transport URL |
+| `SOFT_LIMIT` | `4` | Advisory threshold for concurrent workers |
+| `HARD_LIMIT` | `8` | Maximum concurrent workers |
+| `RAMUNE_DATA_DIR` | `/data/ramune-ida` | Data directory (projects + plugins) |
 
 ## License
 

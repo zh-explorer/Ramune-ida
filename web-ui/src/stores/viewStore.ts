@@ -79,6 +79,7 @@ interface ViewStore {
   saveSession: () => void;
   restoreSession: (projectId: string) => void;
   clearAll: () => void;
+  invalidateCache: () => void;
 
   // Xrefs request signal (from context menu → XrefsList)
   xrefRequest: { target: string; ts: number } | null;
@@ -456,6 +457,31 @@ export const useViewStore = create<ViewStore>((set, get) => ({
         }
       }
     } catch {}
+  },
+
+  invalidateCache: () => {
+    const state = get();
+    const updated: Record<string, ChannelState> = {};
+    for (const [ch, channel] of Object.entries(state.channels)) {
+      updated[ch] = { ...channel, _cache: new Map() };
+    }
+    set({ channels: updated });
+    // Re-navigate current function on active channel to refresh
+    const active = state.channels[state.activeChannel];
+    if (active?.currentFunc) {
+      // Slight delay to let cache clear propagate
+      setTimeout(() => {
+        const s = get();
+        const ch = s.activeChannel;
+        const pid = active.currentFunc;
+        if (pid) {
+          // Force reload by navigating to same function
+          const { useProjectStore } = require("./projectStore");
+          const projectId = useProjectStore.getState().activeProjectId;
+          if (projectId) s.navigateTo(ch, projectId, active.currentFunc!);
+        }
+      }, 50);
+    }
   },
 
   requestXrefs: (_ch: string, target: string) => {

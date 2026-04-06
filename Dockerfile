@@ -1,3 +1,11 @@
+# Stage 1: Build frontend
+FROM node:20-slim AS frontend
+WORKDIR /app
+COPY web-ui/ web-ui/
+COPY src/ramune_ida/web/frontend/ src/ramune_ida/web/frontend/
+RUN cd web-ui && npm ci && npx vite build
+
+# Stage 2: Python package + IDA
 FROM ida-pro:latest
 
 ENV TRANSPORT="http://0.0.0.0:8000"
@@ -14,12 +22,13 @@ ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /opt/ramune-ida
 
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock README.md hatch_build.py ./
 RUN uv sync --no-install-project
 
 COPY src/ src/
+COPY --from=frontend /app/src/ramune_ida/web/frontend/ src/ramune_ida/web/frontend/
 RUN uv sync
 
 EXPOSE 8000
 
-ENTRYPOINT ["sh", "-c", "exec uv run ramune-ida $TRANSPORT --soft-limit $SOFT_LIMIT --hard-limit $HARD_LIMIT"]
+ENTRYPOINT ["sh", "-c", "exec uv run ramune-ida $TRANSPORT --web --soft-limit $SOFT_LIMIT --hard-limit $HARD_LIMIT"]

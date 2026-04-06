@@ -104,37 +104,6 @@ uv run ramune-ida --worker-python /opt/ida/python3
 uv run ramune-ida sse://127.0.0.1:9000
 ```
 
-### Docker
-
-需要预先构建 `ida-pro:latest` 基础镜像（含 IDA Pro），参见 [docker-ida](https://github.com/user/docker-ida)。
-
-```bash
-# 构建
-docker build -t ramune-ida .
-
-# 运行（默认 http://0.0.0.0:8000）
-docker run -p 8000:8000 ramune-ida
-
-# 自定义配置
-docker run -p 8745:8745 \
-  -e TRANSPORT="http://0.0.0.0:8745" \
-  -e SOFT_LIMIT=2 \
-  -e HARD_LIMIT=4 \
-  ramune-ida
-
-# 持久化数据目录（项目 + 插件）
-docker run -p 8000:8000 \
-  -v /path/to/data:/data/ramune-ida \
-  ramune-ida
-```
-
-| 环境变量 | 默认值 | 说明 |
-|---|---|---|
-| `TRANSPORT` | `http://0.0.0.0:8000` | 传输协议地址 |
-| `SOFT_LIMIT` | `4` | 并发 Worker 建议上限 |
-| `HARD_LIMIT` | `8` | 并发 Worker 硬上限 |
-| `RAMUNE_DATA_DIR` | `/data/ramune-ida` | 数据目录（项目 + 插件） |
-
 ### MCP 客户端配置
 
 Claude Desktop 或 Cursor 中添加：
@@ -173,7 +142,22 @@ Ramune-ida 包含一个可选的 Web 界面，用于实时观测 AI Agent 活动
 uv run ramune-ida --web
 ```
 
-功能包括 IDA 风格线性反汇编、反编译语法高亮、交叉引用导航、面板同步、AI 实时活动监控等。详见 [Web UI 文档](docs/web-ui_zh.md)。
+**功能：**
+
+- IDA 风格线性反汇编（IDA View）—— 虚拟滚动 + 双向加载
+- 反编译视图 —— tree-sitter C 语法高亮 + 行级同步
+- Hex View —— 字节级选择、多格式复制、虚拟滚动
+- 地址空间概览条 —— 按类型着色、缩放、点击跳转
+- 右键上下文菜单 —— 所有面板统一（复制地址、Xrefs、跳转）
+- 键盘快捷键 —— X=交叉引用、G=搜索、Esc=返回、鼠标侧键前进/后退
+- 交叉引用面板 —— 手动查询模式
+- Local Types 浏览器 —— 内联展开 C 定义、嵌套类型跳转
+- 搜索面板 —— 正则 + 字节模式
+- AI 实时活动流 —— 按工具类型展开详情
+- 可拖拽 Dock 面板布局 —— 持久化状态
+- 打开数据库后自动导航到 main/start
+
+详见 [Web UI 文档](docs/web-ui_zh.md)。
 
 > **注意**：Web UI 前端代码主要由 AI（Claude）编写，未经过充分的代码审查。
 
@@ -197,6 +181,46 @@ uv run ramune-ida --web
 | `--data-dir` | `~/.ramune-ida` | 数据目录（项目 + 插件）（`RAMUNE_DATA_DIR`） |
 | `--auto-save-interval` | `300` | 自动保存间隔秒数（0 = 禁用） |
 | `--output-max-length` | `20000` | 工具输出截断字符数 |
+| `--web` | 关闭 | 启用 Web UI（同端口） |
+
+## 构建
+
+### 从源码
+
+```bash
+git clone https://github.com/user/Ramune-ida.git
+cd Ramune-ida
+uv sync
+uv run ramune-ida
+```
+
+### 重新构建前端
+
+需要 Node.js >= 18：
+
+```bash
+RAMUNE_BUILD_WEB=1 uv build
+```
+
+不设 `RAMUNE_BUILD_WEB` 时，`uv build` 使用仓库中预构建的前端文件。
+
+### Docker
+
+需要预先构建 `ida-pro:latest` 基础镜像（含 IDA Pro）
+
+Dockerfile 使用多阶段构建 —— Node.js 构建前端，最终镜像仅包含 Python + IDA。默认启用 Web UI。
+
+```bash
+docker build -t ramune-ida .
+docker run -p 8000:8000 ramune-ida
+```
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `TRANSPORT` | `http://0.0.0.0:8000` | 传输协议地址 |
+| `SOFT_LIMIT` | `4` | 并发 Worker 建议上限 |
+| `HARD_LIMIT` | `8` | 并发 Worker 硬上限 |
+| `RAMUNE_DATA_DIR` | `/data/ramune-ida` | 数据目录（项目 + 插件） |
 
 ## 许可证
 

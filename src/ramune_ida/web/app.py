@@ -20,7 +20,7 @@ from starlette.types import ASGIApp
 
 from ramune_ida.server.state import AppState
 from ramune_ida.web.activity import ActivityMiddleware, ActivityStore, create_activity_routes
-from ramune_ida.web.api import projects, analysis, listing, search
+from ramune_ida.web.api import projects, analysis, listing, search, overview
 
 log = logging.getLogger(__name__)
 
@@ -41,6 +41,7 @@ def create_combined_app(
         *analysis.create_routes(get_state),
         *listing.create_routes(get_state),
         *search.create_routes(get_state),
+        *overview.create_routes(get_state, activity_store),
         activity_routes["api"],
     ]
 

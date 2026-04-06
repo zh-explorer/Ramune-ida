@@ -15,21 +15,26 @@ function formatTime(ts: number): string {
   return d.toLocaleTimeString("en-US", { hour12: false });
 }
 
-/** Extract a navigable target from activity params (func=main, addr=0x1234) */
+/** Extract a navigable target (address or symbol) from activity event. */
 function extractTarget(ev: ActivityEvent): string | null {
-  const match = ev.params_summary.match(
-    /(?:func|addr)=([^\s,]+)/,
+  // Match common param names that contain addresses or symbols
+  const paramMatch = ev.params_summary.match(
+    /(?:func|addr|name|target|var)=([^\s,]+)/,
   );
-  return match ? match[1] : null;
+  if (paramMatch) return paramMatch[1];
+  // Match bare hex address anywhere in summary
+  const hexMatch = ev.params_summary.match(/\b(0x[0-9a-fA-F]+)\b/);
+  if (hexMatch) return hexMatch[1];
+  return null;
 }
 
 export function ActivityStream() {
   const { events, paused, setPaused } = useActivityStore();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!paused) {
-      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      topRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [events.length, paused]);
 
@@ -62,7 +67,8 @@ export function ActivityStream() {
         {events.length === 0 && (
           <div className="empty-hint">Waiting for AI activity...</div>
         )}
-        {events.map((ev) => {
+        <div ref={topRef} />
+        {[...events].reverse().map((ev) => {
           const target = extractTarget(ev);
           return (
             <div
@@ -88,7 +94,6 @@ export function ActivityStream() {
             </div>
           );
         })}
-        <div ref={bottomRef} />
       </div>
     </div>
   );

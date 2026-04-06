@@ -12,7 +12,7 @@ interface StringEntry {
 }
 
 export function StringList() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const { navigateActive } = useViewStore();
   const [strings, setStrings] = useState<StringEntry[]>([]);
   const [filter, setFilter] = useState("");
@@ -34,7 +34,7 @@ export function StringList() {
   useEffect(() => {
     if (!activeProjectId) { setStrings([]); return; }
     fetchStrings(true);
-  }, [activeProjectId, fetchStrings]);
+  }, [activeProjectId, dataVersion, fetchStrings]);
 
   const filtered = useMemo(() => {
     if (!filter) return strings;

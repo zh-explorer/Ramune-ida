@@ -37,6 +37,13 @@ export const useActivityStore = create<ActivityState>((set) => ({
   clear: () => set({ events: [] }),
 }));
 
+// Callbacks for database open events
+const _dbOpenCallbacks: Array<(projectId: string) => void> = [];
+export function onDatabaseOpened(cb: (projectId: string) => void) {
+  _dbOpenCallbacks.push(cb);
+  return () => { const i = _dbOpenCallbacks.indexOf(cb); if (i >= 0) _dbOpenCallbacks.splice(i, 1); };
+}
+
 // WebSocket connection manager
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -57,6 +64,14 @@ export function connectActivityStream() {
     try {
       const event: ActivityEvent = JSON.parse(msg.data);
       useActivityStore.getState().addEvent(event);
+      // Detect open_database completion
+      if (
+        event.tool_name === "open_database" &&
+        event.status === "completed" &&
+        event.project_id
+      ) {
+        for (const cb of _dbOpenCallbacks) cb(event.project_id);
+      }
     } catch {
       // ignore malformed
     }

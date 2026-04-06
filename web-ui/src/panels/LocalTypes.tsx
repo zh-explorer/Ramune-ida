@@ -18,7 +18,7 @@ function parseTypeItem(item: string): { kind: string; name: string } {
 }
 
 export function LocalTypes() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const [items, setItems] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,7 +40,7 @@ export function LocalTypes() {
   useEffect(() => {
     if (!activeProjectId) { setItems([]); return; }
     fetchData(true);
-  }, [activeProjectId, fetchData]);
+  }, [activeProjectId, dataVersion, fetchData]);
 
   useEffect(() => {
     setExpandedSet(new Set());

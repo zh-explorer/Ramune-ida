@@ -62,6 +62,15 @@ export const linearView = (pid: string, addr: string, count?: number, direction?
     ...(direction ? { direction } : {}),
   });
 
+export const hexView = (pid: string, addr: string, count?: number, direction?: "forward" | "backward") =>
+  request<{ rows: { addr: string; hex: string }[]; has_more: boolean }>(
+    `${BASE}/projects/${pid}/hex_view`, {
+      addr,
+      ...(count ? { count: String(count) } : {}),
+      ...(direction ? { direction } : {}),
+    },
+  );
+
 // Listings
 export const listFuncs = (pid: string, filter?: string, exclude?: string) =>
   request<Record<string, unknown>>(`${BASE}/projects/${pid}/functions`, {

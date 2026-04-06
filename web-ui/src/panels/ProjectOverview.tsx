@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useProjectStore } from "../stores/projectStore";
-import { getProject, getProjectFiles } from "../api/client";
+import { useViewStore } from "../stores/viewStore";
+import { getProject, getProjectFiles, listFuncs } from "../api/client";
 import type { ProjectDetail, ProjectFile } from "../api/types";
 
 function formatSize(bytes: number): string {
@@ -77,6 +78,18 @@ export function ProjectOverview() {
         await openDatabase(activeProjectId, filename);
         refresh();
         fetchProjects();
+        useProjectStore.getState().bumpDataVersion();
+        // Auto-navigate to main/start
+        try {
+          const res = await listFuncs(activeProjectId);
+          const funcs = ((res as any).items || []) as { addr: string; name: string }[];
+          const target = funcs.find((f) => f.name === "main")
+            || funcs.find((f) => f.name === "_start" || f.name === "start")
+            || funcs[0];
+          if (target) {
+            useViewStore.getState().navigateActive(activeProjectId, target.addr);
+          }
+        } catch {}
       } catch (e) {
         setError(String(e));
       } finally {

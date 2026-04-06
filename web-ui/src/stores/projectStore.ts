@@ -12,6 +12,8 @@ interface ProjectState {
   fetchProjects: () => Promise<void>;
   fetchSystem: () => Promise<void>;
   setActiveProject: (pid: string | null) => void;
+  dataVersion: number;
+  bumpDataVersion: () => void;
 }
 
 export const useProjectStore = create<ProjectState>((set) => ({
@@ -53,4 +55,6 @@ export const useProjectStore = create<ProjectState>((set) => ({
   },
 
   setActiveProject: (pid) => set({ activeProjectId: pid }),
+  dataVersion: 0,
+  bumpDataVersion: () => set((s) => ({ dataVersion: s.dataVersion + 1 })),
 }));

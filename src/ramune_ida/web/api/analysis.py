@@ -133,6 +133,20 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
             params["direction"] = direction
         return await _execute_tool(get_state, pid, "linear_view", params)
 
+    async def hex_view(request: Request) -> JSONResponse:
+        pid = request.path_params["pid"]
+        addr = request.query_params.get("addr")
+        if not addr:
+            return JSONResponse({"error": "Missing 'addr' param"}, status_code=400)
+        params: dict[str, Any] = {"addr": addr}
+        count = request.query_params.get("count")
+        if count:
+            params["count"] = int(count)
+        direction = request.query_params.get("direction")
+        if direction:
+            params["direction"] = direction
+        return await _execute_tool(get_state, pid, "hex_view", params)
+
     async def local_types(request: Request) -> JSONResponse:
         pid = request.path_params["pid"]
         params: dict[str, Any] = {}
@@ -167,6 +181,7 @@ def create_routes(get_state: Callable[[], AppState]) -> list[Route]:
         Route("/projects/{pid}/survey", survey),
         Route("/projects/{pid}/func_view", func_view),
         Route("/projects/{pid}/linear_view", linear_view),
+        Route("/projects/{pid}/hex_view", hex_view),
         Route("/projects/{pid}/resolve", resolve),
         Route("/projects/{pid}/local_types", local_types),
         Route("/projects/{pid}/type_detail", type_detail),

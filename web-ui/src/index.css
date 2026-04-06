@@ -209,6 +209,20 @@ body {
   margin: 4px 8px;
 }
 
+/* Overview bar */
+.overview-bar-wrap {
+  padding: 3px 6px;
+  flex-shrink: 0;
+}
+.overview-bar {
+  width: 100%;
+  height: 20px;
+  background: #000000;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  cursor: crosshair;
+}
+
 /* Context menu (right-click) */
 .ctx-menu {
   position: fixed;
@@ -1130,6 +1144,10 @@ body {
 .hex-byte-hl {
   background: rgba(255, 213, 79, 0.3);
   border-radius: 2px;
+}
+.hex-gap {
+  color: var(--border);
+  letter-spacing: 2px;
 }
 
 .hex-ascii {

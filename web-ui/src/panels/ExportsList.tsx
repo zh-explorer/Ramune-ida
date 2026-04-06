@@ -11,7 +11,7 @@ interface ExportEntry {
 }
 
 export function ExportsList() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const navigateActive = useViewStore((s) => s.navigateActive);
   const [exports, setExports] = useState<ExportEntry[]>([]);
   const [filter, setFilter] = useState("");
@@ -30,7 +30,7 @@ export function ExportsList() {
   useEffect(() => {
     if (!activeProjectId) { setExports([]); return; }
     fetchData(true);
-  }, [activeProjectId, fetchData]);
+  }, [activeProjectId, dataVersion, fetchData]);
 
   const filtered = useMemo(() => {
     if (!filter) return exports;

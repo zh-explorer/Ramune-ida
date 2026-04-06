@@ -13,7 +13,7 @@ interface FuncEntry {
 }
 
 export function FunctionList() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const { navigateActive, activeChannel, getChannel } = useViewStore();
   const currentFunc = getChannel(activeChannel).currentFunc;
   const [functions, setFunctions] = useState<FuncEntry[]>([]);
@@ -37,7 +37,7 @@ export function FunctionList() {
   useEffect(() => {
     if (!activeProjectId) { setFunctions([]); return; }
     fetchFunctions(true);
-  }, [activeProjectId, fetchFunctions]);
+  }, [activeProjectId, dataVersion, fetchFunctions]);
 
   const filtered = useMemo(() => {
     if (!filter) return functions;

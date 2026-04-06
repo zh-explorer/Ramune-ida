@@ -7,6 +7,7 @@ import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
 import { ContextMenuLayer } from "./components/ContextMenu";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
+import { OverviewBar } from "./components/OverviewBar";
 import { ActivityStream } from "./panels/ActivityStream";
 import { ProjectOverview } from "./panels/ProjectOverview";
 import { FunctionList } from "./panels/FunctionList";
@@ -27,7 +28,9 @@ import { useViewStore } from "./stores/viewStore";
 import {
   connectActivityStream,
   disconnectActivityStream,
+  onDatabaseOpened,
 } from "./stores/activityStore";
+import { listFuncs } from "./api/client";
 import { applyTheme, getStoredThemeId } from "./theme/themes";
 import { TabTitle } from "./components/TabTitle";
 import "./App.css";
@@ -224,6 +227,50 @@ function App() {
     fetchSystem();
     connectActivityStream();
 
+    // Navigate to a default function when a project becomes ready
+    async function autoNavigate(projectId: string) {
+      fetchProjects();
+      const ps = useProjectStore.getState();
+      if (!ps.activeProjectId) ps.setActiveProject(projectId);
+      try {
+        const res = await listFuncs(projectId);
+        const funcs = ((res as any).items || []) as { addr: string; name: string }[];
+        const main = funcs.find((f) => f.name === "main");
+        const start = funcs.find((f) => f.name === "_start" || f.name === "start");
+        const target = main || start || funcs[0];
+        if (target) {
+          useViewStore.getState().navigateActive(projectId, target.addr);
+        }
+      } catch {}
+    }
+
+    // When a database is opened (via MCP or manual), refresh and navigate
+    const unsubDb = onDatabaseOpened((projectId) => {
+      useProjectStore.getState().bumpDataVersion();
+      setTimeout(() => autoNavigate(projectId), 300);
+    });
+
+    // On first load: if active project already has a database, auto-navigate
+    setTimeout(() => {
+      const ps = useProjectStore.getState();
+      const vs = useViewStore.getState();
+      const pid = ps.activeProjectId;
+      if (pid && !vs.getChannel(vs.activeChannel).currentFunc) {
+        const proj = ps.projects.find((p) => p.project_id === pid);
+        if (proj?.has_database) autoNavigate(pid);
+      }
+    }, 1000);
+
+    // When active project changes, auto-navigate if it has a database
+    const unsubProject = useProjectStore.subscribe((state, prev) => {
+      if (state.activeProjectId && state.activeProjectId !== (prev as any).activeProjectId) {
+        const proj = state.projects.find((p) => p.project_id === state.activeProjectId);
+        if (proj?.has_database) {
+          setTimeout(() => autoNavigate(state.activeProjectId!), 200);
+        }
+      }
+    });
+
     const interval = setInterval(() => {
       fetchProjects();
       fetchSystem();
@@ -232,6 +279,8 @@ function App() {
     return () => {
       clearInterval(interval);
       disconnectActivityStream();
+      unsubDb();
+      unsubProject();
     };
   }, [fetchProjects, fetchSystem]);
 
@@ -293,6 +342,7 @@ function App() {
         onAddPanel={handleAddPanel}
         onResetLayout={handleResetLayout}
       />
+      <div className="overview-bar-wrap"><OverviewBar /></div>
       <div className="app-main">
         <DockLayout
           ref={dockRef}

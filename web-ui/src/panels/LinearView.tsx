@@ -141,16 +141,39 @@ export function LinearView({ tabId = "idaview" }: { tabId?: string }) {
 
   useEffect(() => {
     if (!targetAddr) return;
-    const el = containerRef.current?.querySelector(`[data-addr="${targetAddr}"]`);
+    const container = containerRef.current;
+    if (!container) { jumpTo(targetAddr); return; }
+
+    // Try exact match first
+    let el = container.querySelector(`[data-addr="${targetAddr}"]`);
+
+    // If no exact match, check if target is within the loaded address range
+    if (!el && lines.length > 0) {
+      const targetNum = parseInt(targetAddr, 16);
+      const firstAddr = parseInt(lines[0].addr, 16);
+      const lastAddr = parseInt(lines[lines.length - 1].addr, 16);
+      if (targetNum >= firstAddr && targetNum <= lastAddr) {
+        // Find the closest line
+        let closest: typeof lines[0] | null = null;
+        for (const line of lines) {
+          if (!line.addr) continue;
+          const lineAddr = parseInt(line.addr, 16);
+          if (lineAddr <= targetNum) closest = line;
+          else break;
+        }
+        if (closest) {
+          el = container.querySelector(`[data-addr="${closest.addr}"]`);
+        }
+      }
+    }
+
     if (el) {
-      // Already loaded — check if visible
       const rect = el.getBoundingClientRect();
-      const cRect = containerRef.current!.getBoundingClientRect();
+      const cRect = container.getBoundingClientRect();
       if (rect.top < cRect.top || rect.bottom > cRect.bottom) {
         el.scrollIntoView({ block: "center", behavior: "smooth" });
       }
     } else {
-      // Not loaded — jump (clear + reload around target)
       jumpTo(targetAddr);
     }
   }, [targetAddr]); // eslint-disable-line

@@ -12,7 +12,7 @@ interface ImportEntry {
 }
 
 export function ImportsList() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const navigateActive = useViewStore((s) => s.navigateActive);
   const [imports, setImports] = useState<ImportEntry[]>([]);
   const [filter, setFilter] = useState("");
@@ -32,7 +32,7 @@ export function ImportsList() {
   useEffect(() => {
     if (!activeProjectId) { setImports([]); return; }
     fetchData(true);
-  }, [activeProjectId, fetchData]);
+  }, [activeProjectId, dataVersion, fetchData]);
 
   const filtered = useMemo(() => {
     if (!filter) return imports;

@@ -96,6 +96,165 @@ def resolve(params: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+# ── hex_view ──────────────────────────────────────────────────
+
+
+def hex_view(params: dict[str, Any]) -> dict[str, Any]:
+    """Return hex dump rows, skipping unmapped gaps between segments."""
+    import ida_bytes
+    import ida_ida
+    import idc
+    import idautils
+
+    addr_str = params.get("addr", "0")
+    count = int(params.get("count", 32) or 32)
+    direction = params.get("direction", "forward")
+
+    ea = _resolve_addr(addr_str)
+    ea = ea & ~0xF  # align to 16-byte row
+
+    min_ea = ida_ida.inf_get_min_ea()
+    max_ea = ida_ida.inf_get_max_ea()
+
+    # Build segment ranges for gap detection
+    segments = []
+    for seg_ea in idautils.Segments():
+        seg_end = idc.get_segm_attr(seg_ea, idc.SEGATTR_END)
+        segments.append((seg_ea, seg_end))
+    segments.sort()
+
+    def in_segment(addr: int) -> bool:
+        for s, e in segments:
+            if addr >= s and addr < e:
+                return True
+        return False
+
+    def next_seg_start(addr: int) -> int | None:
+        """Next segment start at or after addr."""
+        for s, e in segments:
+            if addr >= s and addr < e:
+                return addr
+            if s > addr:
+                return s
+        return None
+
+    def prev_seg_addr(addr: int) -> int | None:
+        """Last row-aligned address in the segment at or before addr."""
+        for s, e in reversed(segments):
+            if addr >= s and addr < e:
+                return addr
+            if e <= addr:
+                return (e - 16) & ~0xF
+        return None
+
+    rows: list[dict[str, Any]] = []
+
+    if direction == "backward":
+        cur = ea
+        while len(rows) < count and cur >= min_ea:
+            if in_segment(cur):
+                raw = ida_bytes.get_bytes(cur, 16) or b""
+                rows.append({"addr": hex(cur), "hex": raw.hex().ljust(32, "0")})
+                cur -= 16
+            else:
+                prev = prev_seg_addr(cur)
+                if prev is None:
+                    break
+                cur = prev
+        rows.reverse()
+        has_more = cur >= min_ea and prev_seg_addr(cur) is not None
+    else:
+        cur = ea
+        while len(rows) < count and cur < max_ea:
+            if in_segment(cur):
+                raw = ida_bytes.get_bytes(cur, 16) or b""
+                rows.append({"addr": hex(cur), "hex": raw.hex().ljust(32, "0")})
+                cur += 16
+            else:
+                nxt = next_seg_start(cur)
+                if nxt is None:
+                    break
+                cur = nxt & ~0xF
+        has_more = cur < max_ea and next_seg_start(cur) is not None
+
+    return {"rows": rows, "has_more": has_more}
+
+
+# ── overview_scan ─────────────────────────────────────────────
+
+
+def overview_scan(params: dict[str, Any]) -> dict[str, Any]:
+    """Scan address space and return contiguous type regions."""
+    import ida_bytes
+    import ida_ida
+    import idc
+    import idautils
+
+    min_ea = ida_ida.inf_get_min_ea()
+    max_ea = ida_ida.inf_get_max_ea()
+
+    start = int(params["start_ea"], 16) if params.get("start_ea") else min_ea
+    end = int(params["end_ea"], 16) if params.get("end_ea") else max_ea
+
+    regions: list[dict[str, Any]] = []
+
+    for seg_ea in idautils.Segments():
+        seg_end = idc.get_segm_attr(seg_ea, idc.SEGATTR_END)
+        # Skip segments outside requested range
+        if seg_end <= start or seg_ea >= end:
+            continue
+        scan_start = max(seg_ea, start)
+        scan_end = min(seg_end, end)
+
+        ea = scan_start
+        cur_type: str | None = None
+        cur_start = ea
+
+        while ea < scan_end and ea != idc.BADADDR:
+            flags = ida_bytes.get_flags(ea)
+            if ida_bytes.is_code(flags):
+                rtype = "code"
+            elif ida_bytes.is_data(flags):
+                rtype = "data"
+            else:
+                rtype = "unknown"
+
+            if rtype != cur_type:
+                if cur_type is not None:
+                    regions.append({
+                        "start": hex(cur_start),
+                        "end": hex(ea),
+                        "type": cur_type,
+                    })
+                cur_type = rtype
+                cur_start = ea
+
+            ea = idc.next_head(ea, scan_end)
+            if ea == idc.BADADDR:
+                ea = scan_end
+
+        if cur_type is not None:
+            regions.append({
+                "start": hex(cur_start),
+                "end": hex(scan_end),
+                "type": cur_type,
+            })
+
+    # Collect segment boundaries
+    segments = []
+    for seg_ea in idautils.Segments():
+        seg_end = idc.get_segm_attr(seg_ea, idc.SEGATTR_END)
+        seg_name = idc.get_segm_name(seg_ea) or ""
+        segments.append({"start": hex(seg_ea), "end": hex(seg_end), "name": seg_name})
+
+    return {
+        "min_ea": hex(min_ea),
+        "max_ea": hex(max_ea),
+        "segments": segments,
+        "regions": regions,
+    }
+
+
 # ── linear_view ────────────────────────────────────────────────
 
 

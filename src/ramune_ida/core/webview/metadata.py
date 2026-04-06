@@ -51,4 +51,44 @@ TOOLS: list[dict] = [
             },
         },
     },
+    {
+        "name": "hex_view",
+        "description": "Hex dump view: returns rows of 16 bytes, skipping gaps.",
+        "tags": ["webview", TAG_KIND_READ, TAG_MCP_FALSE],
+        "params": {
+            "addr": {
+                "type": "string",
+                "required": True,
+                "description": "Start address or name",
+            },
+            "count": {
+                "type": "integer",
+                "required": False,
+                "description": "Number of rows to return (default 32)",
+            },
+            "direction": {
+                "type": "string",
+                "required": False,
+                "description": "forward (default) or backward",
+            },
+        },
+    },
+    {
+        "name": "overview_scan",
+        "description": "Scan address space and return type regions (code/data/unknown).",
+        "tags": ["webview", TAG_KIND_READ, TAG_MCP_FALSE],
+        "params": {
+            "start_ea": {
+                "type": "string",
+                "required": False,
+                "description": "Start address (hex). Defaults to min_ea.",
+            },
+            "end_ea": {
+                "type": "string",
+                "required": False,
+                "description": "End address (hex). Defaults to max_ea.",
+            },
+        },
+        "timeout": 120,
+    },
 ]

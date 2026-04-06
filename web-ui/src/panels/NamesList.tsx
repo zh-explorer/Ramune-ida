@@ -11,7 +11,7 @@ interface NameEntry {
 }
 
 export function NamesList() {
-  const { activeProjectId } = useProjectStore();
+  const { activeProjectId, dataVersion } = useProjectStore();
   const navigateActive = useViewStore((s) => s.navigateActive);
   const [names, setNames] = useState<NameEntry[]>([]);
   const [filter, setFilter] = useState("");
@@ -30,7 +30,7 @@ export function NamesList() {
   useEffect(() => {
     if (!activeProjectId) { setNames([]); return; }
     fetchData(true);
-  }, [activeProjectId, fetchData]);
+  }, [activeProjectId, dataVersion, fetchData]);
 
   const filtered = useMemo(() => {
     if (!filter) return names;

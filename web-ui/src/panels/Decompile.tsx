@@ -4,6 +4,7 @@ import { useProjectStore } from "../stores/projectStore";
 import { initParser, isParserReady, tokenizeLine } from "../utils/cParser";
 import { renderTokens, highlightCFallback } from "../utils/highlight";
 import { ChannelBadge } from "../components/ChannelBadge";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 export function Decompile({ tabId = "decompile" }: { tabId?: string }) {
   const store = useViewStore();
@@ -17,6 +18,7 @@ export function Decompile({ tabId = "decompile" }: { tabId?: string }) {
     highlightDecompileLines, highlightToken } = channel;
 
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
+  const onContextMenu = useCodeContextMenu(ch);
 
   // Initialize tree-sitter parser
   useEffect(() => {
@@ -109,7 +111,7 @@ export function Decompile({ tabId = "decompile" }: { tabId?: string }) {
           >▶</button>
         </div>
       </div>
-      <div className="panel-body code-panel-body" ref={containerRef}>
+      <div className="panel-body code-panel-body" ref={containerRef} onContextMenu={onContextMenu}>
         {loading && <div className="code-overlay">Loading...</div>}
         {error && <div className="code-overlay error-msg">{error}</div>}
         {!currentFunc && !loading && (

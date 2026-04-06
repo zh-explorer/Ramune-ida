@@ -5,6 +5,8 @@ import "rc-dock/dist/rc-dock-dark.css";
 
 import { Toolbar } from "./components/Toolbar";
 import { StatusBar } from "./components/StatusBar";
+import { ContextMenuLayer } from "./components/ContextMenu";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import { ActivityStream } from "./panels/ActivityStream";
 import { ProjectOverview } from "./panels/ProjectOverview";
 import { FunctionList } from "./panels/FunctionList";
@@ -57,6 +59,18 @@ function parseTabType(id: string): string {
 }
 
 let tabCounter = 100;
+
+// Global panel opener — used by context menu / hooks to open panels programmatically
+let _addPanel: ((type: string) => void) | null = null;
+/** Open a panel of the given type. Callable from anywhere after App mounts. */
+export function addPanel(type: string) { _addPanel?.(type); }
+
+/**
+ * Find the first existing tab of a given type, or null.
+ * Used to check if e.g. an xrefs panel already exists.
+ */
+let _findTab: ((type: string) => string | null) | null = null;
+export function findTabOfType(type: string): string | null { return _findTab?.(type) ?? null; }
 
 function makeTab(id: string): TabData {
   const type = parseTabType(id);
@@ -177,6 +191,8 @@ function App() {
   const clearView = useViewStore((s) => s.clearAll);
   const dockRef = useRef<DockLayout>(null);
 
+  useGlobalShortcuts();
+
   // Compute initial layout ONCE
   const initialLayout = useMemo(() => loadSavedLayout() || createDefaultLayout(), []);
 
@@ -253,6 +269,19 @@ function App() {
     dockRef.current.dockMove(createNewTab(type), null, "float");
   }, []);
 
+  // Register global panel opener
+  useEffect(() => {
+    _addPanel = handleAddPanel;
+    _findTab = (type: string) => {
+      const store = useViewStore.getState();
+      for (const tabId of Object.keys(store.tabChannels)) {
+        if (parseTabType(tabId) === type) return tabId;
+      }
+      return null;
+    };
+    return () => { _addPanel = null; _findTab = null; };
+  }, [handleAddPanel]);
+
   const handleResetLayout = useCallback(() => {
     localStorage.removeItem(LS_KEY);
     window.location.reload();
@@ -275,6 +304,7 @@ function App() {
         />
       </div>
       <StatusBar />
+      <ContextMenuLayer />
     </div>
   );
 }

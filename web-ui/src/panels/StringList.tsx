@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { listStrings } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 interface StringEntry {
   addr: string;
@@ -51,6 +52,8 @@ export function StringList() {
     estimateSize: () => 24,
     overscan: 20,
   });
+
+  const onContextMenu = useCodeContextMenu();
 
   const handleClick = useCallback(
     (entry: StringEntry) => {
@@ -102,6 +105,9 @@ export function StringList() {
                     transform: `translateY(${vRow.start}px)`,
                   }}
                   onClick={() => handleClick(entry)}
+                  onContextMenu={onContextMenu}
+                  data-addr={entry.addr}
+                  data-token={entry.value}
                 >
                   <span className="func-addr">{entry.addr}</span>
                   <span className="string-value">{entry.value}</span>

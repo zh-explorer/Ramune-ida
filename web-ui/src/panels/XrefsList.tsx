@@ -3,6 +3,7 @@ import { xrefs } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
 import { ChannelBadge } from "../components/ChannelBadge";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 interface XrefEntry {
   addr: string;
@@ -30,6 +31,7 @@ export function XrefsList({ tabId = "xrefs" }: { tabId?: string }) {
   const [addrInput, setAddrInput] = useState("");
 
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
+  const onContextMenu = useCodeContextMenu(ch);
 
   const doQuery = useCallback((target: string) => {
     if (!activeProjectId || !target) return;
@@ -50,6 +52,13 @@ export function XrefsList({ tabId = "xrefs" }: { tabId?: string }) {
     if (!activeProjectId || !addr || queryAddr) return;
     doQuery(addr);
   }, [activeProjectId, addr, queryAddr, doQuery]);
+
+  // Respond to xref requests from context menu
+  const xrefRequest = store.xrefRequest;
+  useEffect(() => {
+    if (!xrefRequest || !activeProjectId) return;
+    doQuery(xrefRequest.target);
+  }, [xrefRequest, activeProjectId, doQuery]);
 
   const handleGo = useCallback(() => {
     if (!addrInput) return;
@@ -94,6 +103,8 @@ export function XrefsList({ tabId = "xrefs" }: { tabId?: string }) {
                 key={i}
                 className="xref-item"
                 onClick={() => handleClick(entry)}
+                onContextMenu={onContextMenu}
+                data-addr={entry.addr}
               >
                 <span className="xref-addr">{entry.addr}</span>
                 <span className="xref-text">{entry.text.replace(entry.addr, "").trim()}</span>

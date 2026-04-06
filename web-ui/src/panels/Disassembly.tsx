@@ -4,6 +4,7 @@ import { useProjectStore } from "../stores/projectStore";
 import { highlightOps } from "../utils/highlightAsm";
 import { isNavigable } from "../utils/codeNav";
 import { ChannelBadge } from "../components/ChannelBadge";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 export function Disassembly({ tabId = "disassembly" }: { tabId?: string }) {
   const store = useViewStore();
@@ -16,6 +17,7 @@ export function Disassembly({ tabId = "disassembly" }: { tabId?: string }) {
     highlightDisasmAddrs, highlightToken } = channel;
 
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
+  const onContextMenu = useCodeContextMenu(ch);
 
   useEffect(() => {
     if (highlightDisasmAddrs.length === 0 || !containerRef.current) return;
@@ -59,7 +61,7 @@ export function Disassembly({ tabId = "disassembly" }: { tabId?: string }) {
         <ChannelBadge tabId={tabId} />
         <span>Disassembly{currentFunc ? `: ${currentFunc}` : ""}</span>
       </div>
-      <div className="panel-body code-panel-body" ref={containerRef}>
+      <div className="panel-body code-panel-body" ref={containerRef} onContextMenu={onContextMenu}>
         {loading && <div className="code-overlay">Loading...</div>}
         {error && <div className="code-overlay error-msg">{error}</div>}
         {!currentFunc && !loading && (

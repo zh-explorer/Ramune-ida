@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { survey } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 interface ExportEntry {
   addr: string;
@@ -46,6 +47,8 @@ export function ExportsList() {
     overscan: 20,
   });
 
+  const onContextMenu = useCodeContextMenu();
+
   const handleClick = useCallback(
     (entry: ExportEntry) => {
       if (activeProjectId) navigateActive(activeProjectId, entry.addr);
@@ -73,6 +76,9 @@ export function ExportsList() {
                 <div key={vRow.key} className="func-row"
                   style={{ position: "absolute", top: 0, left: 0, width: "100%", height: vRow.size, transform: `translateY(${vRow.start}px)` }}
                   onClick={() => handleClick(entry)}
+                  onContextMenu={onContextMenu}
+                  data-addr={entry.addr}
+                  data-token={entry.name}
                 >
                   <span className="func-addr">{entry.addr}</span>
                   <span className="func-name">{entry.name}</span>

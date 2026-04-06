@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { listFuncs } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 // FunctionList navigates on the active channel
 interface FuncEntry {
@@ -54,6 +55,8 @@ export function FunctionList() {
     estimateSize: () => 24,
     overscan: 20,
   });
+
+  const onContextMenu = useCodeContextMenu();
 
   const handleClick = useCallback(
     (func: FuncEntry) => {
@@ -107,6 +110,9 @@ export function FunctionList() {
                     transform: `translateY(${vRow.start}px)`,
                   }}
                   onClick={() => handleClick(func)}
+                  onContextMenu={onContextMenu}
+                  data-addr={func.addr}
+                  data-token={func.name}
                 >
                   <span className="func-addr">{func.addr}</span>
                   <span className="func-name">{func.name}</span>

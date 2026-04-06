@@ -79,12 +79,17 @@ interface ViewStore {
   saveSession: () => void;
   restoreSession: (projectId: string) => void;
   clearAll: () => void;
+
+  // Xrefs request signal (from context menu → XrefsList)
+  xrefRequest: { target: string; ts: number } | null;
+  requestXrefs: (ch: string, target: string) => void;
 }
 
 export const useViewStore = create<ViewStore>((set, get) => ({
   channels: { A: emptyChannel() },
   activeChannel: "A",
   tabChannels: {},
+  xrefRequest: null,
 
   getChannel: (ch: string) => {
     return get().channels[ch] || emptyChannel();
@@ -451,5 +456,9 @@ export const useViewStore = create<ViewStore>((set, get) => ({
         }
       }
     } catch {}
+  },
+
+  requestXrefs: (_ch: string, target: string) => {
+    set({ xrefRequest: { target, ts: Date.now() } });
   },
 }));

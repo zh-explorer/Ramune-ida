@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { searchText, searchBytes } from "../api/client";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 
 type SearchMode = "text" | "bytes";
 type SearchScope = "all" | "strings" | "names" | "types" | "disasm";
@@ -31,6 +32,7 @@ const SOURCE_COLORS: Record<string, string> = {
 export function SearchPanel() {
   const { activeProjectId } = useProjectStore();
   const store = useViewStore();
+  const onContextMenu = useCodeContextMenu();
 
   const [mode, setMode] = useState<SearchMode>("text");
   const [scope, setScope] = useState<SearchScope>("all");
@@ -121,6 +123,9 @@ export function SearchPanel() {
             {results.map((r, i) => (
               <div key={i} className="xref-item"
                 onClick={() => handleClick(r)}
+                onContextMenu={onContextMenu}
+                data-addr={r.addr}
+                data-token={r.value}
                 style={{ cursor: r.addr ? "pointer" : "default" }}>
                 <span className="search-source" style={{ color: SOURCE_COLORS[r.source] || "var(--text-muted)" }}>
                   {r.source}

@@ -1,7 +1,23 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectStore } from "../stores/projectStore";
 import { useViewStore } from "../stores/viewStore";
 import { ChannelBadge } from "../components/ChannelBadge";
+import { showContextMenu, type ContextMenuItem } from "../components/ContextMenu";
+
+function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text);
+  } else {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
 
 const BYTES_PER_ROW = 16;
 const DEFAULT_SIZE = 256;
@@ -47,9 +63,13 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
   const [loading, setLoading] = useState(false);
   const [addrInput, setAddrInput] = useState("");
 
+  // Selection state: [start, end] byte offsets (inclusive)
+  const [selStart, setSelStart] = useState<number | null>(null);
+  const [selEnd, setSelEnd] = useState<number | null>(null);
+  const dragging = useRef(false);
+
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
 
-  // Load bytes from an address
   const loadAddr = useCallback(
     (addr: string) => {
       if (!activeProjectId) return;
@@ -66,12 +86,10 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
     [activeProjectId],
   );
 
-  // Follow channel's targetAddr (navigation jumps)
   useEffect(() => {
     if (targetAddr) loadAddr(targetAddr);
   }, [targetAddr, loadAddr]);
 
-  // Follow highlight sync (click in other panels)
   useEffect(() => {
     if (highlightDisasmAddrs.length > 0) loadAddr(highlightDisasmAddrs[0]);
   }, [highlightDisasmAddrs, loadAddr]);
@@ -80,12 +98,85 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
     if (addrInput) loadAddr(addrInput);
   };
 
+  // Mouse selection handlers
+  const onByteMouseDown = useCallback((offset: number, e: React.MouseEvent) => {
+    if (e.button === 2) return; // right-click handled by onContextMenu
+    e.preventDefault();
+    dragging.current = true;
+    setSelStart(offset);
+    setSelEnd(offset);
+  }, []);
+
+  const onByteMouseEnter = useCallback((offset: number) => {
+    if (dragging.current) {
+      setSelEnd(offset);
+    }
+  }, []);
+
+  useEffect(() => {
+    const onMouseUp = () => { dragging.current = false; };
+    window.addEventListener("mouseup", onMouseUp);
+    return () => window.removeEventListener("mouseup", onMouseUp);
+  }, []);
+
+  // Compute selected range
+  const selMin = selStart !== null && selEnd !== null ? Math.min(selStart, selEnd) : -1;
+  const selMax = selStart !== null && selEnd !== null ? Math.max(selStart, selEnd) : -1;
+
+  const getSelectedBytes = useCallback((): number[] => {
+    if (selMin < 0 || selMax < 0) return [];
+    return bytes.slice(selMin, selMax + 1);
+  }, [bytes, selMin, selMax]);
+
+  const onContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const sel = getSelectedBytes();
+    if (sel.length === 0) return;
+
+    const addr = baseAddr + selMin;
+    const items: ContextMenuItem[] = [
+      {
+        label: `Copy address (0x${addr.toString(16)})`,
+        onClick: () => copyText("0x" + addr.toString(16)),
+      },
+      { label: "", onClick: () => {}, separator: true },
+      {
+        label: `Copy hex (${sel.length} bytes)`,
+        onClick: () => copyText(sel.map((b) => formatHex(b).toUpperCase()).join(" ")),
+      },
+      {
+        label: "Copy as hex string",
+        onClick: () => copyText(sel.map((b) => formatHex(b)).join("")),
+      },
+      {
+        label: "Copy as C array",
+        onClick: () => {
+          const inner = sel.map((b) => "0x" + formatHex(b).toUpperCase()).join(", ");
+          copyText(`{ ${inner} }`);
+        },
+      },
+      {
+        label: "Copy as Python bytes",
+        onClick: () => copyText(`b'${sel.map((b) => "\\x" + formatHex(b)).join("")}'`),
+      },
+      {
+        label: "Copy as ASCII",
+        onClick: () => copyText(sel.map((b) => formatAscii(b)).join("")),
+      },
+      {
+        label: "Copy as IDA pattern",
+        onClick: () => copyText(sel.map((b) => formatHex(b).toUpperCase()).join(" ")),
+      },
+    ];
+
+    showContextMenu(e.clientX, e.clientY, items);
+  }, [getSelectedBytes, baseAddr, selMin]);
+
   const rows: number[][] = [];
   for (let i = 0; i < bytes.length; i += BYTES_PER_ROW) {
     rows.push(bytes.slice(i, i + BYTES_PER_ROW));
   }
 
-  // Which byte offset is highlighted?
   const highlightOffset = highlightDisasmAddrs.length > 0
     ? parseInt(highlightDisasmAddrs[0], 16) - baseAddr
     : -1;
@@ -111,7 +202,7 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
           <div className="empty-hint">No data</div>
         )}
         {!loading && rows.length > 0 && (
-          <table className="hex-table">
+          <table className="hex-table" onContextMenu={onContextMenu}>
             <tbody>
               {rows.map((row, rowIdx) => {
                 const addr = baseAddr + rowIdx * BYTES_PER_ROW;
@@ -122,21 +213,38 @@ export function HexView({ tabId = "hex" }: { tabId?: string }) {
                     </td>
                     <td className="hex-bytes">
                       {row.map((b, i) => {
-                        const byteOffset = rowIdx * BYTES_PER_ROW + i;
+                        const offset = rowIdx * BYTES_PER_ROW + i;
                         const isHl = highlightOffset >= 0 &&
-                          byteOffset >= highlightOffset &&
-                          byteOffset < highlightOffset + 16;
+                          offset >= highlightOffset &&
+                          offset < highlightOffset + 16;
+                        const isSel = offset >= selMin && offset <= selMax;
                         return (
-                          <span key={i} className={`hex-byte${isHl ? " hex-byte-hl" : ""}`}>
+                          <span
+                            key={i}
+                            className={`hex-byte${isHl ? " hex-byte-hl" : ""}${isSel ? " hex-byte-sel" : ""}`}
+                            onMouseDown={(e) => onByteMouseDown(offset, e)}
+                            onMouseEnter={() => onByteMouseEnter(offset)}
+                          >
                             {formatHex(b)}
                           </span>
                         );
                       })}
                     </td>
                     <td className="hex-ascii">
-                      {row.map((b, i) => (
-                        <span key={i}>{formatAscii(b)}</span>
-                      ))}
+                      {row.map((b, i) => {
+                        const offset = rowIdx * BYTES_PER_ROW + i;
+                        const isSel = offset >= selMin && offset <= selMax;
+                        return (
+                          <span
+                            key={i}
+                            className={isSel ? "hex-ascii-sel" : ""}
+                            onMouseDown={(e) => onByteMouseDown(offset, e)}
+                            onMouseEnter={() => onByteMouseEnter(offset)}
+                          >
+                            {formatAscii(b)}
+                          </span>
+                        );
+                      })}
                     </td>
                   </tr>
                 );

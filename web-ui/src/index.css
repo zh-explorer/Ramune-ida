@@ -209,6 +209,18 @@ body {
   margin: 4px 8px;
 }
 
+/* Context menu (right-click) */
+.ctx-menu {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 0;
+  z-index: 10000;
+  min-width: 160px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
 .has-submenu {
   position: relative;
 }
@@ -1096,6 +1108,19 @@ body {
 .hex-byte {
   margin-right: 4px;
   color: var(--text-primary);
+  cursor: default;
+}
+.hex-byte-sel {
+  background: var(--accent);
+  color: var(--bg-primary);
+  border-radius: 2px;
+}
+.hex-ascii-sel {
+  background: var(--accent);
+  color: var(--bg-primary);
+}
+.hex-bytes, .hex-ascii {
+  user-select: none;
 }
 
 .hex-byte:nth-child(8) {

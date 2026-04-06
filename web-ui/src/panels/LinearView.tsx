@@ -5,6 +5,7 @@ import { useViewStore } from "../stores/viewStore";
 import { highlightOps } from "../utils/highlightAsm";
 import { isNavigable } from "../utils/codeNav";
 import { ChannelBadge } from "../components/ChannelBadge";
+import { useCodeContextMenu } from "../hooks/useCodeContextMenu";
 import type { LinearLine } from "../api/types";
 
 const CHUNK_SIZE = 150;
@@ -27,6 +28,7 @@ export function LinearView({ tabId = "idaview" }: { tabId?: string }) {
   const loadingRef = useRef(false);
 
   const activate = useCallback(() => store.setActiveChannel(ch), [store, ch]);
+  const onContextMenu = useCodeContextMenu(ch);
 
   // ── Core load functions ────────────────────────────────────
 
@@ -271,6 +273,7 @@ export function LinearView({ tabId = "idaview" }: { tabId?: string }) {
       <div
         className="panel-body code-panel-body linear-body"
         ref={containerRef}
+        onContextMenu={onContextMenu}
         onScroll={handleScroll}
       >
         {lines.length === 0 && !loading && (

@@ -62,6 +62,7 @@ def _run_worker() -> None:
     from ramune_ida.commands import Ping, Shutdown
     from ramune_ida.protocol import Method, Response
 
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGUSR1, lambda _sig, _frame: cancel.request())
 
     io = SocketIO()
@@ -90,7 +91,7 @@ def _run_worker() -> None:
 
     io.close()
     try:
-        idapro.close_database(save=False)
+        idapro.close_database(save=True)
     except Exception:
         pass
 

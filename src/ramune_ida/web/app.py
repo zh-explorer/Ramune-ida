@@ -119,7 +119,7 @@ class _CombinedApp:
         await self.mcp_app(scope, receive, send)
 
     async def _handle_lifespan(self, scope, receive, send):
-        """Initialise AppState, then forward lifespan to MCP app."""
+        """Initialise AppState at startup. Shutdown is handled by cli._serve()."""
         from starlette.types import Message
 
         startup_complete_sent = False
@@ -127,7 +127,6 @@ class _CombinedApp:
         async def wrapped_send(message: Message) -> None:
             nonlocal startup_complete_sent
             if message["type"] == "lifespan.startup.complete":
-                # Before telling uvicorn startup is done, ensure AppState exists.
                 if not startup_complete_sent:
                     startup_complete_sent = True
                     from ramune_ida.server.app import ensure_state

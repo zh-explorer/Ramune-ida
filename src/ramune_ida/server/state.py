@@ -16,7 +16,7 @@ import shutil
 from ramune_ida.config import ServerConfig
 from ramune_ida.limiter import Limiter
 from ramune_ida.project import Project
-from ramune_ida.commands import CloseDatabase
+from ramune_ida.commands import CloseDatabase, Shutdown
 from ramune_ida.server.output import OutputStore
 
 log = logging.getLogger(__name__)
@@ -80,10 +80,44 @@ class AppState:
                 await self._auto_save_task
             except asyncio.CancelledError:
                 pass
+
+        # Graceful close: save databases before killing workers
+        active = [
+            p for p in self.projects.values()
+            if p._handle is not None and p._handle.is_alive()
+        ]
+        if active:
+            log.info("Closing %d database(s)...", len(active))
+            await asyncio.gather(
+                *(self._graceful_close(p) for p in active),
+                return_exceptions=True,
+            )
+
         for project in list(self.projects.values()):
             project.force_close()
+
+        for pid in list(self.projects):
+            self.output_store.discard_project(pid)
+
         self.projects.clear()
         log.info("Server shutdown complete")
+
+    async def _graceful_close(
+        self, project: Project, timeout: float = 10.0,
+    ) -> None:
+        """Send CloseDatabase(save=True) with timeout, log on failure."""
+        try:
+            await asyncio.wait_for(
+                project.execute(CloseDatabase(save=True)), timeout=timeout,
+            )
+            await asyncio.wait_for(
+                project.execute(Shutdown()), timeout=5.0,
+            )
+            log.info("Saved and closed %s", project.project_id)
+        except Exception as exc:
+            log.warning(
+                "Graceful close failed for %s: %s", project.project_id, exc,
+            )
 
     # ------------------------------------------------------------------
     # Project management

@@ -10,7 +10,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
+import signal
 from urllib.parse import urlparse
 
 
@@ -113,7 +115,6 @@ def main() -> None:
             enable_dns_rebinding_protection=False,
         )
 
-    import uvicorn
     from starlette.types import ASGIApp, Receive, Scope, Send
 
     from ramune_ida.server.app import request_base_url
@@ -148,15 +149,44 @@ def main() -> None:
             dev_mode=bool(os.environ.get("RAMUNE_WEB_DEV")),
         )
 
-    try:
-        uvicorn.run(
-            _HostCapture(asgi_app),
-            host=host,
-            port=port,
-            log_level=mcp.settings.log_level.lower(),
-        )
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(_serve(
+        _HostCapture(asgi_app), host, port, mcp.settings.log_level.lower(),
+    ))
+
+
+async def _serve(app: object, host: str, port: int, log_level: str) -> None:
+    """Run uvicorn with top-level signal handling for graceful shutdown."""
+    import uvicorn
+
+    config = uvicorn.Config(app, host=host, port=port, log_level=log_level)
+    server = uvicorn.Server(config)
+    server.install_signal_handlers = lambda: None  # we handle signals
+
+    shutdown_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, shutdown_event.set)
+
+    serve_task = asyncio.create_task(server.serve())
+    shutdown_task = asyncio.create_task(shutdown_event.wait())
+
+    await asyncio.wait(
+        [serve_task, shutdown_task],
+        return_when=asyncio.FIRST_COMPLETED,
+    )
+
+    if shutdown_event.is_set():
+        from ramune_ida.server import app as _app
+
+        if _app._state is not None:
+            await _app._state.shutdown()
+            _app._state = None
+
+        server.should_exit = True
+        try:
+            await asyncio.wait_for(serve_task, timeout=5.0)
+        except asyncio.TimeoutError:
+            serve_task.cancel()
 
 
 if __name__ == "__main__":

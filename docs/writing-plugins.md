@@ -169,7 +169,7 @@ ramune-ida --exclude-tags "kind:unsafe,core::undo::*"
 
 Excluded tools are still registered in the worker dispatch table — they are only hidden from MCP clients. Web UI internal tools (`mcp:false`) are always hidden regardless of this setting.
 
-If you don't like a particular tool, exclude it by tag — or simply delete its plugin folder. If you don't like the built-in tools, `--exclude-tags "core::*"` disables them all. You can even delete everything under `core/` and the server will still run; only session management tools (which are not plugins) remain.
+If you don't like a particular tool, exclude it by tag — or simply delete its plugin folder. If you don't like the built-in tools, `--exclude-tags "core::*"` disables them all. Prefer `--exclude-tags` over deleting `core/` folders: exclusion only hides tools from MCP clients while keeping handlers available for internal use (e.g. `open_database` calls `survey` internally).
 
 ### Example
 

@@ -84,7 +84,7 @@ See [Writing Plugins](docs/writing-plugins.md) for the full guide, including met
 ### Install
 
 ```bash
-git clone https://github.com/user/Ramune-ida.git
+git clone https://github.com/RamuneIDA/Ramune-ida.git
 cd Ramune-ida
 uv sync
 ```
@@ -189,7 +189,7 @@ All data is stored under a single data directory (default `~/.ramune-ida`, confi
 ### From source
 
 ```bash
-git clone https://github.com/user/Ramune-ida.git
+git clone https://github.com/RamuneIDA/Ramune-ida.git
 cd Ramune-ida
 uv sync
 uv run ramune-ida

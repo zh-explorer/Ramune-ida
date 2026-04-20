@@ -84,7 +84,7 @@ Ramune-ida 通过 `<data-dir>/plugins/`（默认 `~/.ramune-ida/plugins/`）支�
 ### 安装
 
 ```bash
-git clone https://github.com/user/Ramune-ida.git
+git clone https://github.com/RamuneIDA/Ramune-ida.git
 cd Ramune-ida
 uv sync
 ```
@@ -190,7 +190,7 @@ uv run ramune-ida --web
 ### 从源码
 
 ```bash
-git clone https://github.com/user/Ramune-ida.git
+git clone https://github.com/RamuneIDA/Ramune-ida.git
 cd Ramune-ida
 uv sync
 uv run ramune-ida

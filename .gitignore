@@ -168,8 +168,8 @@ cython_debug/
 web-ui/node_modules/
 web-ui/dist/
 src/ramune_ida/web/frontend/
-tests/ch*
-tests/binary/
+
+# IDA databases (keep test binaries themselves under tests/binary/)
 *.i64
 *.idb
 *.id0
